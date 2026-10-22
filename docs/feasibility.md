@@ -60,8 +60,7 @@ beams and backlight.
 
 - **The cluster may not wake on power alone.** No pin connects to the ignition
   rail, so it probably learns key position from bus traffic. Power, ground and
-  data pins are now known (see [pinout.md](pinout.md)); connector C is still
-  pending.
+  data pins are now known (see [pinout.md](pinout.md)).
 - **Proprietary messages for lights and the display may not crack by
   sweeping.** Fallback: drive those LEDs and the clip-in stepper motors
   directly and accept a dark display.

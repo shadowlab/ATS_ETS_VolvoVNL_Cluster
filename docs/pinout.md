@@ -1,8 +1,7 @@
 # Cluster pinout
 
 From the 2011–2013 VNL wiring diagram (bridgeplan 21849527), read off the
-drawing on sheet BA (connectors A and B). Connector C (sheet BB) is still
-pending. **Check every pin with a meter on your own cluster and harness
+drawings on sheets BA (connectors A and B) and BB (connector C). **Check every pin with a meter on your own cluster and harness
 before powering it.**
 
 The cluster has three connectors: **A03A**, **A03B** and **A03C** (written
@@ -46,11 +45,32 @@ cluster powered, the pin reading about 5 V is the supply; the other is the
 signal, so a stand-in is a voltage on the signal pin between 0 V and that
 supply.
 
-## Connector C (pending sheet BB)
+## Connector C
 
-Known from cross-references so far: C:3 seat belt switch (HC3A1), C:8 F63
-indicator circuit, C:10 interaxle / interwheel diff lock indicator (F27),
-C:29 wiper circuit (HC29A1, F26). It may also carry more grounds.
+Connector C is optional for the gauges and adds no grounds: **A:2 is the
+cluster's only ground**. The indicator inputs switch to sensor ground (A:12 /
+B:1).
+
+| Pin | Wire | Function | Bench hookup |
+|---|---|---|---|
+| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: switch to sensor ground |
+| C:5 | HC5A1 | Air filter restriction switch (B39) | Optional: switch to sensor ground |
+| C:7 | HC7A1 | To engine harness (Volvo X11.A:9 / Cummins FCEN:D) | Leave open |
+| C:8 | F63E1 | Fifth wheel / lift axle circuit (switch S93) | Optional: switch to sensor ground |
+| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: switch to sensor ground |
+| C:11 | HC11A1 | Diff lock engaged indicator (S45x / S047 / S048) | Optional: switch to sensor ground |
+| C:22 / C:25 | HC22A1 / HC25A1 | Steering wheel buttons via contact reel Z06 (HI/MI, radio, YES/NO) | Optional menu buttons |
+| C:30 | HC30A1 | Steering wheel button return | With C:22 / C:25 |
+| C:29 | HC29A1 | To sheet GP (MCFC:119), wiper circuit | Leave open |
+
+## Minimum bench harness
+
+| Pins | For |
+|---|---|
+| A:1, A:2, A:3 | Battery +12 V, ground, key-switch +12 V |
+| A:15, A:16 | J1939 CAN1 H / L |
+| A:17, A:18 | J1708/J1587 A / B |
+| B:3, plus the B air pressure pairs, with A:12 / B:1 sensor ground | Analog gauges (fuel and air), when you get to phase 4 |
 
 ## No ignition pin
 
