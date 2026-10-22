@@ -58,8 +58,10 @@ beams and backlight.
 
 ## Risks and fallbacks
 
-- **Ground and battery pin numbers aren't in the diagram's text.** Read them
-  off the drawing (sheets BA/BB) or find them with a meter.
+- **The cluster may not wake on power alone.** No pin connects to the ignition
+  rail, so it probably learns key position from bus traffic. Power, ground and
+  data pins are now known (see [pinout.md](pinout.md)); connector C is still
+  pending.
 - **Proprietary messages for lights and the display may not crack by
   sweeping.** Fallback: drive those LEDs and the clip-in stepper motors
   directly and accept a dark display.
