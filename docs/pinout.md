@@ -15,7 +15,7 @@ A, B, C below).
 | A:2 | X03DA17 | Ground (cab ground stud) | Ground |
 | A:3 | F15D10 | F15 key-switch battery circuit | +12 V |
 | A:4 / A:5 / A:6 / A:7 | HA4A1 / HA5A1 / HA6A1 / HA7A1 | Stalk buttons Select / Esc / Up / Down, each switching +12 V in | Push buttons to +12 V |
-| A:10 / A:22 | CAN3 A / B | Radio and sleeper climate (LECM) bus; 120 Ω inside the cluster | Leave open |
+| A:10 / A:22 | DL3HB17 / DL3LB17 | CAN3 H / L: radio and sleeper climate (LECM) bus; 120 Ω inside the cluster | Leave open |
 | A:12 | HA12A1 | Sensor ground (common return for analog sensors) | Return for the sensor stand-ins |
 | A:15 | DL1HN3 | J1939 CAN1 H | CAN transceiver CANH |
 | A:16 | DL1LN3 | J1939 CAN1 L | CAN transceiver CANL |

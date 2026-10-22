@@ -5,6 +5,23 @@ warning lights, turn signals and the driver display are the hard part.
 Expect a moderate-to-hard hobby project: a weekend to get RPM, speed and
 temperature moving, then several weeks of trial and error for the rest.
 
+## Status (October 2026)
+
+All hardware for bench testing is bought or on hand, and the full A/B/C
+pinout is known from the wiring diagram. Nothing has been powered up yet.
+
+| Area | Known | Still open |
+|---|---|---|
+| Power and ground | Battery on A:1 (F20), F15 key-switch circuit on A:3, ground on A:2 (the only cluster ground) | Whether the cluster wakes on A:1 + A:3 alone or needs bus traffic |
+| J1939 CAN1 | A:15 (H) and A:16 (L), 250 kbit/s | Cluster's own source address; whether it terminates CAN1 (measure A:15 to A:16) |
+| J1708/J1587 | A:17 (A, +) and A:18 (B, −), 9600 baud; cluster is MID 140 | What it needs from the VECU to clear the communication error |
+| CAN3 | A:10 (H) and A:22 (L); radio and sleeper climate only; 120 Ω inside the cluster | Not needed for gauges |
+| Analog gauges | Fuel sender on B:3; five air pressure gauges each on a supply + signal pair on connector B; sensor ground on A:12 and B:1 | Which pin of each pair is supply; resistance and voltage ranges |
+| Telltales and display | Seat belt, diff lock, air filter and fifth wheel are switch inputs on connector C | Turn signals, high beam, warnings and display pages, probably proprietary messages |
+| Menu buttons | Stalk buttons on A:4 to A:7 (switch +12 V in); steering wheel buttons on C:22 / C:25 with C:30 return | — |
+
+Full pin tables: [pinout.md](pinout.md). Parts: [parts.md](parts.md).
+
 ## Which cluster
 
 "2011–2019 VNL" spans two different trucks. Volvo replaced the VN with an
@@ -15,26 +32,49 @@ layout Volvo has used since the 2004 VN.
 
 The cluster bought for this build is **21844839-P01**, from a 2012 VNL. A
 sibling part, 21844834-P01, turns up pulled from 2013 VNLs, so the 218448xx
-numbers look like option variants of the same cluster. No public pinout or
-spec sheet for 21844839 itself was found.
+numbers look like option variants of the same cluster. Its pinout comes from
+the 2011–2013 VNL wiring diagram (bridgeplan 21849527, sheets BA and BB).
 
 ## What shapes the design
 
-- **Two networks, not one.** The cluster sits on J1939 CAN1 (250 kbit/s),
-  J1708/J1587 (9600 baud) and a CAN3 subnet. CAN3 only goes to the radio and
-  sleeper climate module (LECM), so it can be ignored for the gauges.
+- **Three buses, one that matters most.** The cluster sits on J1939 CAN1
+  (250 kbit/s), J1708/J1587 (9600 baud) and a CAN3 subnet. CAN3 only goes to
+  the radio and sleeper climate module (LECM), so one CAN channel plus one
+  J1708 transceiver covers the gauges.
 - **The cluster wants its VECU.** Volvo service bulletins for 2013–2015 and
   2018–2019 trucks describe "J1587 Communication Error with Vehicle ECU" when
   the cluster (MID 140) loses its J1587 partner. The bridge has to fake it.
-- **Some gauges are wired straight to sensors.** Fuel level and the air
-  pressures appear to come in as analog sensor wires on connector C, not as
-  network messages. They need stand-in signals (pots, digital pots or a DAC).
+- **No ignition input.** No cluster pin connects to the ignition rail. A:3 is
+  fed from F15, the battery supply to the key switch, which stays live with
+  the key off. The cluster probably learns key position over the data links,
+  so it may stay dark until it sees traffic. A:3 goes on its own switch on
+  the bench to test this.
+- **Some gauges are wired straight to sensors.** Fuel level and the five air
+  pressures are analog inputs on connector B, not network messages. They need
+  stand-in signals: the decade box first to find ranges, then digital pots or
+  a DAC.
 - **No existing project.** No published project drives this cluster from ATS.
   Closest relatives: [CarCluster](https://github.com/jakka351/carcluster)
   (ESP32 + CAN + SimHub), and a VW Constellation truck cluster on xsimulator
   that drives the steppers directly.
-- **No real truck to capture from.** Messages are found by sweeping, as in the
-  Mazda 3 build. See [sweep_plan.md](sweep_plan.md).
+- **No real truck to capture from.** Messages are found by listening first,
+  then sweeping. See [sweep_plan.md](sweep_plan.md).
+
+## Hardware
+
+| Role | Part |
+|---|---|
+| Bridge | ESP32-S3: CAN1 on the built-in TWAI controller, J1708 on a UART |
+| CAN1 transceiver | SN65HVD230 module |
+| J1708 transceiver | XY-485 (auto direction, 4.7 kΩ bias already fitted; remove R9) |
+| Sniffing | CANable 2.0 with SavvyCAN; 8-channel logic analyzer for J1708 |
+| Spare | ESP32-CAN-X2, for CAN3 or as a second sniffer |
+| Analog stand-ins | Decade box now; digital pots or DAC once ranges are known |
+
+**Cost so far:** about $241 for the cluster and harness, plus about $60 for
+the transceivers, CANable and logic analyzer. Only the digital pots or DAC
+(about $10) remain, so the whole build lands around **$310 to $320**, well
+under the original $360 to $650 estimate.
 
 ## ATS side
 
@@ -49,23 +89,28 @@ beams and backlight.
 
 | Phase | Goal | Difficulty | Rough time |
 |---|---|---|---|
-| 1. Bench power | Power, ignition, ground found; cluster wakes | Easy to moderate | 1–2 evenings |
-| 2. Standard J1939 | Tach, speedo, coolant, oil, voltage move | Moderate | A weekend |
-| 3. J1587 and VECU | Communication error pop-up cleared | Moderate to hard | 1–3 weeks |
-| 4. Analog gauges | Fuel and air pressure needles | Moderate | A weekend |
-| 5. Telltales and display | Blinkers, high beam, warnings, display pages | Hard | Weeks, open-ended |
-| 6. ATS link | SimHub feeding everything | Easy | 1–2 evenings |
+| 1. Bench power | Cluster wakes; learn whether A:3 or bus traffic wakes it | Easy | 1 evening |
+| 2. Listen | Log what the cluster sends on CAN1 and J1708, including requests | Easy | 1 evening |
+| 3. Standard J1939 | Tach, speedo, coolant, oil, voltage move | Moderate | A weekend |
+| 4. J1587 and VECU | Communication error pop-up cleared | Moderate to hard | 1–3 weeks |
+| 5. Analog gauges | Fuel and air pressure needles | Moderate | A weekend |
+| 6. Telltales and display | Blinkers, high beam, warnings, display pages | Hard | Weeks, open-ended |
+| 7. ATS link | SimHub feeding everything | Easy | 1–2 evenings |
+
+Phase 1 is shorter than first estimated because the power, ground and data
+pins are now known from the diagram rather than found by probing.
 
 ## Risks and fallbacks
 
-- **The cluster may not wake on power alone.** No pin connects to the ignition
-  rail, so it probably learns key position from bus traffic. Power, ground and
-  data pins are now known (see [pinout.md](pinout.md)).
+- **The cluster may not wake on power alone.** If it needs a VECU on the
+  bus, phase 4 work moves ahead of phase 3.
 - **Proprietary messages for lights and the display may not crack by
   sweeping.** Fallback: drive those LEDs and the clip-in stepper motors
   directly and accept a dark display.
 - **Used clusters age badly** (cracked solder joints, dead steppers). The 10
   steppers clip in and cost about $14 each.
+- **The XY-485 runs a MAX485 below its rated 5 V.** Common at 9600 baud; if
+  J1708 reception is flaky, swap in a 3.3 V MAX3485-class transceiver.
 
 ## Sources
 
