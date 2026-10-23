@@ -80,7 +80,7 @@ All wires are white/orange. None of connector C is needed for the gauges.
 
 | Pin | Code | Function | Bench |
 |---|---|---|---|
-| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: other side not on this sheet, check |
+| C:3 | HC3A1 | Seat belt switch (S61A, normally open, closes to ground when the belt is latched) | Optional: tie to ground for "belted"; open shows the seat belt warning |
 | C:5 | HC5A1 | Air filter restriction switch (B39) | Optional: switch to sensor ground |
 | C:7 | HC7A1 | To engine harness | Leave open |
 | C:8 | F63E1 | Fifth wheel / lift axle circuit (S93) | Optional: likely +12 V when active (fused F circuit), check |
