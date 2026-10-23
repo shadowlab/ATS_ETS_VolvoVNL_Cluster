@@ -86,3 +86,17 @@ python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF23 --sources 21 -
 ```
 
 Copy confirmed results into [docs/messages.md](../docs/messages.md).
+
+### If the picture is wrong
+
+Run `python sweep_watch.py cameras`. It saves a snapshot from every camera
+number and driver into `cameras/`, so you can see which number is the phone.
+A solid orange or gray picture is usually DroidCam's placeholder, which it
+shows when the phone isn't streaming: open the DroidCam app on the phone and
+connect from the DroidCam PC client first. On Windows, if a number shows the
+right camera in one driver but not another, pass that driver, for example
+`--backend dshow`.
+
+You can also skip the virtual webcam and read the phone's own stream. Close
+the DroidCam PC client, then use the address the phone app shows:
+`--camera http://<phone-ip>:4747/video`.
