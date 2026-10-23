@@ -21,7 +21,7 @@ A, B, C below).
 | A:16 | DL1LN3 | J1939 CAN1 L | CAN transceiver CANL |
 | A:17 | DL4HN15 | J1708/J1587 A (+) | XY-485 A |
 | A:18 | DL4LN15 | J1708/J1587 B (−) | XY-485 B |
-| A:21 | PD21A1 | Goes to module A27, pin D:21 | Leave open |
+| A:21 | PD21A1 | Output D:21 of A27, the Light Control Module. The diagram doesn't label its function. The LCM reads the dash dimmer (S01 pin 13), so dimming is the likeliest guess | Leave open; try it only if a lamp or backlight won't respond over CAN |
 
 ## Connector B
 

@@ -38,7 +38,7 @@ Do this for A:1, A:2, A:3 and B:23 before the first power-up.
 | A:16 | green | DL1LN3 | J1939 CAN1 L | Transceiver CANL |
 | A:17 | white/orange | DL4HN15 | J1708 A (+) | XY-485 A |
 | A:18 | white/orange | DL4LN15 | J1708 B (−) | XY-485 B |
-| A:21 | white/orange | PD21A1 | To module A27 D:21 | Leave open |
+| A:21 | white/orange | PD21A1 | Output D:21 of A27, the Light Control Module (function not labeled; possibly dash dimming) | Leave open |
 | A:22 | green | DL3LB17 | CAN3 L | Leave open |
 
 Empty: A:8, 9, 11, 13, 14, 19, 20.
