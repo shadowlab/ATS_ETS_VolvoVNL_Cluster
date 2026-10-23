@@ -69,6 +69,15 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(sw.candidates([0xFF00], [0x21], [b"\x00" * 8], bits=True)), 64)
 
 
+class RotateTest(unittest.TestCase):
+    def test_rotate(self):
+        img = np.zeros((2, 3), np.uint8)
+        img[0, 0] = 1
+        self.assertEqual(sw.rotate(img, 180)[1, 2], 1)
+        self.assertEqual(sw.rotate(img, 90).shape, (3, 2))
+        self.assertIs(sw.rotate(img, 0), img)
+
+
 class DetectorTest(unittest.TestCase):
     def test_ignores_masked_area(self):
         base = np.full((100, 100, 3), 20, np.uint8)

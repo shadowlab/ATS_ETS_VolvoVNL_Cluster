@@ -99,6 +99,10 @@ accepted, or the PC client lists no devices. On Windows, if a number shows the
 right camera in one driver but not another, pass that driver, for example
 `--backend dshow`.
 
+If the phone is mounted upside down or sideways, add `--rotate 180` (or 90
+or 270) to `pick`, `preview` and `sweep`. Use the same value for all three,
+since the ignore areas are saved in the turned picture's coordinates.
+
 You can also skip the virtual webcam and read the phone's own stream. Close
 the DroidCam PC client, then use the address the phone app shows:
 `--camera http://<phone-ip>:4747/video`.

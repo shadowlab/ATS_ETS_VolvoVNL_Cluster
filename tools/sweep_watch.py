@@ -134,6 +134,15 @@ def warm_up(cap, seconds=2.0):
     return frame
 
 
+ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def rotate(frame, degrees):
+    """Turn a frame clockwise by 0, 90, 180 or 270 degrees."""
+    code = ROTATIONS[degrees]
+    return frame if code is None else cv2.rotate(frame, code)
+
+
 def looks_blank(frame):
     """True for a picture that's nearly one solid color, like a placeholder."""
     return float(frame.std()) < 8
@@ -142,8 +151,9 @@ def looks_blank(frame):
 class Camera:
     """Reads frames on a thread so frame() always returns a fresh picture."""
 
-    def __init__(self, source, width=None, height=None, backend="auto", warmup=2.0):
+    def __init__(self, source, width=None, height=None, backend="auto", warmup=2.0, rotation=0):
         self.cap = open_capture(source, width, height, backend)
+        self.rotation = rotation
         self.lock = threading.Condition()
         self.latest = None
         self.count = 0
@@ -158,6 +168,7 @@ class Camera:
             if not ok:
                 time.sleep(0.05)
                 continue
+            frame = rotate(frame, self.rotation)
             with self.lock:
                 self.latest = frame
                 self.count += 1
@@ -403,6 +414,7 @@ def cmd_pick(args):
     cap.release()
     if frame is None:
         raise SystemExit("No picture from the camera")
+    frame = rotate(frame, args.rotate)
     if looks_blank(frame):
         print("Warning: the picture is one solid color. This may be the wrong camera or a placeholder; "
               "try 'python sweep_watch.py cameras'.")
@@ -443,7 +455,7 @@ def cmd_cameras(args):
 
 
 def cmd_preview(args):
-    camera = Camera(args.camera, args.width, args.height, args.backend)
+    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     rebaseline(camera, detector)
     print("Live view: changed areas are boxed in red. b = new baseline, q = quit")
@@ -479,7 +491,7 @@ def cmd_sweep(args):
         payload = bytes.fromhex(data.replace(" ", "")).ljust(8, b"\xFF")
         msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload, is_extended_id=True)
         background.append(bus.send_periodic(msg, 0.1))
-    camera = Camera(args.camera, args.width, args.height, args.backend)
+    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
         if background:
@@ -506,6 +518,8 @@ def main():
         p.add_argument("--height", type=int)
         p.add_argument("--backend", choices=list(BACKENDS), default="auto",
                        help="camera driver for camera numbers; on Windows try dshow or msmf")
+        p.add_argument("--rotate", type=int, choices=list(ROTATIONS), default=0,
+                       help="turn the picture clockwise by this many degrees")
         p.add_argument("--ignore", default="ignore.json", help="file of areas to ignore (from pick)")
         p.add_argument("--pixel-threshold", type=int, default=30, help="brightness change that counts (0-255)")
         p.add_argument("--min-area", type=float, default=0.002, help="fraction of pixels that must change")
