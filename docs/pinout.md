@@ -38,10 +38,13 @@ A, B, C below).
 | B:12 | HB12A1 | Gearbox oil temperature (B09) | Resistance to sensor ground |
 | B:10 / B:11 / B:15 | HB10A1 / HB11A1 / HB15A1 | Rear axle oil temps: front-rear, rear-rear, center-rear | Optional |
 | B:23 | F02A2 | Accessory (ACC) +12 V, from the ACC rail through fuse F02 (radio fuse, 10 A / 25 A) | +12 V, switched (key at ACC) |
-| B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional |
+| B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional: likely +12 V when active (fused F circuit) |
 
 **Air pressure sensors are 3-wire:** sensor ground plus two cluster pins, one
-a supply and one the signal. The diagram doesn't say which is which. With the
+a supply and one the signal. The diagram doesn't say which is which, but the
+pattern is the same on all five: sensor pin A is sensor ground, sensor pin C
+goes to B:2 / B:6 / B:7 / B:13 / B:14, and sensor pin B goes to B:17 / B:18 /
+B:19 / B:20 / B:21. So measuring one sensor's pair tells you all five. With the
 cluster powered, the pin reading about 5 V is the supply; the other is the
 signal, so a stand-in is a voltage on the signal pin between 0 V and that
 supply.
@@ -49,17 +52,19 @@ supply.
 ## Connector C
 
 Connector C is optional for the gauges and adds no grounds: **A:2 is the
-cluster's only ground**. The indicator inputs switch to sensor ground (A:12 /
-B:1).
+cluster's only ground**. The inputs are not all the same polarity: C:5 (B39)
+switches to sensor ground and C:11 to chassis ground, while C:8 and C:10 are
+fused F circuits, so they most likely see +12 V when active. Check each one
+with a meter before wiring a switch to it.
 
 | Pin | Wire | Function | Bench hookup |
 |---|---|---|---|
-| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: switch to sensor ground |
+| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: other side not on this sheet, check |
 | C:5 | HC5A1 | Air filter restriction switch (B39) | Optional: switch to sensor ground |
 | C:7 | HC7A1 | To engine harness (Volvo X11.A:9 / Cummins FCEN:D) | Leave open |
-| C:8 | F63E1 | Fifth wheel / lift axle circuit (switch S93) | Optional: switch to sensor ground |
-| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: switch to sensor ground |
-| C:11 | HC11A1 | Diff lock engaged indicator (S45x / S047 / S048) | Optional: switch to sensor ground |
+| C:8 | F63E1 | Fifth wheel / lift axle circuit (switch S93) | Optional: likely +12 V when active (fused F circuit), check |
+| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: likely +12 V when active (fused F circuit), check |
+| C:11 | HC11A1 | Diff lock engaged indicator (S45x / S047 / S048) | Optional: switch to ground (diff switches go to chassis ground) |
 | C:22 / C:25 | HC22A1 / HC25A1 | Steering wheel buttons via contact reel Z06 (HI/MI, radio, YES/NO) | Optional menu buttons |
 | C:30 | HC30A1 | Steering wheel button return | With C:22 / C:25 |
 | C:29 | HC29A1 | To sheet GP (MCFC:119), wiper circuit | Leave open |

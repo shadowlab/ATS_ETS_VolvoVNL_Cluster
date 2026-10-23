@@ -64,7 +64,7 @@ All wires are white/orange.
 | B:14 / B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Supply + signal |
 | B:15 | HB15A1 | Rear axle oil temp, center-rear | Optional |
 | B:23 | F02A2 | **ACC +12 V** through fuse F02 (radio fuse) | +12 V on a switch |
-| B:28 | F63C1 | Fifth wheel / lift axle indicator (S88) | Optional |
+| B:28 | F63C1 | Fifth wheel / lift axle indicator (S88) | Optional: likely +12 V when active (fused F circuit) |
 
 Empty: B:4, 5, 8, 16, 22, 24–27, 29, 30.
 
@@ -80,12 +80,12 @@ All wires are white/orange. None of connector C is needed for the gauges.
 
 | Pin | Code | Function | Bench |
 |---|---|---|---|
-| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: switch to sensor ground |
+| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: other side not on this sheet, check |
 | C:5 | HC5A1 | Air filter restriction switch (B39) | Optional: switch to sensor ground |
 | C:7 | HC7A1 | To engine harness | Leave open |
-| C:8 | F63E1 | Fifth wheel / lift axle circuit (S93) | Optional: switch to sensor ground |
-| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: switch to sensor ground |
-| C:11 | HC11A1 | Diff lock engaged indicator | Optional: switch to sensor ground |
+| C:8 | F63E1 | Fifth wheel / lift axle circuit (S93) | Optional: likely +12 V when active (fused F circuit), check |
+| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: likely +12 V when active (fused F circuit), check |
+| C:11 | HC11A1 | Diff lock engaged indicator | Optional: switch to ground (diff switches go to chassis ground) |
 | C:22 / C:25 | HC22A1 / HC25A1 | Steering wheel buttons (Z06) | Optional menu buttons |
 | C:29 | HC29A1 | Wiper circuit | Leave open |
 | C:30 | HC30A1 | Steering wheel button return | With C:22 / C:25 |
