@@ -27,8 +27,8 @@ Use `--interface gs_usb` instead if the CANable runs candleLight firmware.
 After a minute, Ctrl+C prints a summary. Run `can_listen.py` again with
 `--poke` to ask every node to claim its address.
 
-If the cluster stays dark (it has no ignition pin, so it may wait for bus
-traffic), give it something to hear:
+If the cluster stays dark with B:23 (ACC) powered (it has no ignition pin,
+so it may wait for bus traffic), give it something to hear:
 
 ```
 python can_send.py --channel COM5 --pgn F004 --sa 00 --data "FF FF FF 40 1F FF FF FF" --period 0.01

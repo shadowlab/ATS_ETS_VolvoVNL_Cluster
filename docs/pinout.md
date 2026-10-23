@@ -34,9 +34,10 @@ A, B, C below).
 | B:14 + B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Supply + signal |
 | B:6 + B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Supply + signal |
 | B:7 + B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Supply + signal |
-| B:9 | HB9B1 | Ambient air temperature (B22A) | Resistance to sensor ground |
+| B:9 | HB9A1 | Ambient air temperature (B22A) | Resistance to sensor ground |
 | B:12 | HB12A1 | Gearbox oil temperature (B09) | Resistance to sensor ground |
 | B:10 / B:11 / B:15 | HB10A1 / HB11A1 / HB15A1 | Rear axle oil temps: front-rear, rear-rear, center-rear | Optional |
+| B:23 | F02A2 | Accessory (ACC) +12 V, from the ACC rail through fuse F02 (radio fuse, 10 A / 25 A) | +12 V, switched (key at ACC) |
 | B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional |
 
 **Air pressure sensors are 3-wire:** sensor ground plus two cluster pins, one
@@ -68,16 +69,22 @@ B:1).
 | Pins | For |
 |---|---|
 | A:1, A:2, A:3 | Battery +12 V, ground, key-switch +12 V |
+| B:23 | ACC +12 V (switched) |
 | A:15, A:16 | J1939 CAN1 H / L |
 | A:17, A:18 | J1708/J1587 A / B |
 | B:3, plus the B air pressure pairs, with A:12 / B:1 sensor ground | Analog gauges (fuel and air), when you get to phase 4 |
 
-## No ignition pin
+## Key position: ACC on B:23, no IGN pin
 
-No cluster pin connects to the ignition (IGN) rail. The cluster most likely
-learns key position over the data links from the VECU, so it may stay dark
-with power applied until it sees bus traffic. If it doesn't wake on bench
-power alone, start sending J1939 and J1587 traffic before deciding it's dead.
+B:23 is fed from the accessory (ACC) rail through fuse F02, which it shares
+with the radio. It is the only hardwired key-position input. No pin
+connects to the ignition (IGN) rail, so the cluster most likely learns
+RUN/START over the data links from the VECU.
+
+On the bench, put +12 V on B:23 through a switch so you can simulate key
+off and key at ACC. If the cluster still doesn't wake with A:1, A:3 and
+B:23 powered, start sending J1939 and J1587 traffic before deciding it's
+dead.
 
 ## Termination
 
@@ -88,4 +95,4 @@ means add 120 Ω at both ends. J1708 uses **no** terminator.
 ## First power-up
 
 Bench supply at 12–13.5 V with the current limit around 1 A. Ground on A:2,
-+12 V on A:1, then +12 V on A:3.
++12 V on A:1, then +12 V on A:3, then +12 V on B:23 (ACC).
