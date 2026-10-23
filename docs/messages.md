@@ -18,14 +18,19 @@ against the paid SAE documents.
 | DEF level | AT1T1I 65110 (0xFE56), SPN 1761 | n/a | Yes (AdBlue) |
 | Parking brake, cruise | CCVS1 65265 | n/a | Yes |
 | Check engine / stop lamps | DM1 65226 (0xFECA) lamp bits | n/a | Partly |
-| Fuel level, air pressures | Analog on connector C | 96, 117, 118 | Yes |
+| Fuel level, air pressures | Analog on connector B | 96, 117, 118 | Yes |
+| Airbag (SRS) lamp | n/a: the SRS module (A15) is on J1587 only | MID 232, PIDs unknown | No |
 | Turn signals, high beam, other telltales | Unknown, likely proprietary | Unknown | Yes |
 
 ## Open questions
 
 - What must the cluster hear from the VECU to stop showing the J1587
   communication error?
-- Are turn signals and high beam hard-wired inputs on A/C, or messages?
+- Turn signals and high beam have no hard-wired input on A/B/C, so they are
+  messages (the wiring diagram shows the Light Control Module driving the
+  lamps directly). The one open wire is A:21, an LCM output, possibly dimming.
+- Does the cluster light the airbag lamp when it hears nothing from the SRS
+  module (MID 232)? If so, the bridge has to fake MID 232 as well as the VECU.
 - Do fuel and air pressure also accept network values, or only analog?
 
 ## Confirmed on the bench
