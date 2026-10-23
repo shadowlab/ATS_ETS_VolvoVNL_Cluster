@@ -39,7 +39,7 @@ the bridge has to fake that ECU too.
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | `firmware/` | ESP32-S3 bridge firmware (to come) |
-| [`tools/`](tools/) | Bus listeners and a frame sender for the bench; sweep scripts to come |
+| [`tools/`](tools/) | Bus listeners, a frame sender and the camera-watched sweep |
 
 ## Hardware
 

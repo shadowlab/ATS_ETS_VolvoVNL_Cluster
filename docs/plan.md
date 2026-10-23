@@ -19,8 +19,8 @@ pressures) with the decade box. Record every result in
 [messages.md](messages.md), with a checklist of what is supported and what is
 still unknown.
 
-Sweeps run unattended with a camera watching the cluster (`sweep_watch.py`,
-to come): DroidCam on an Android phone over USB, with exposure, white balance
+Sweeps run unattended with a camera watching the cluster
+([`sweep_watch.py`](../tools/README.md#camera-sweep)): DroidCam on an Android phone over USB, with exposure, white balance
 and focus locked. For each candidate the script sends the frame for about a
 second and compares the picture against an idle baseline, ignoring masked
 areas like the clock. When something changes, it saves before and after
