@@ -93,7 +93,9 @@ Run `python sweep_watch.py cameras`. It saves a snapshot from every camera
 number and driver into `cameras/`, so you can see which number is the phone.
 A solid orange or gray picture is usually DroidCam's placeholder, which it
 shows when the phone isn't streaming: open the DroidCam app on the phone and
-connect from the DroidCam PC client first. On Windows, if a number shows the
+connect from the DroidCam PC client first. For USB, the phone needs Developer
+options with **USB debugging** turned on and the "Allow USB debugging?" prompt
+accepted, or the PC client lists no devices. On Windows, if a number shows the
 right camera in one driver but not another, pass that driver, for example
 `--backend dshow`.
 
