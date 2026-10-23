@@ -32,13 +32,14 @@ the bridge has to fake that ECU too.
 
 | Path | What it is |
 |---|---|
+| [`docs/plan.md`](docs/plan.md) | The four-step plan from bench to game |
 | [`docs/feasibility.md`](docs/feasibility.md) | Can it be done, what it costs, phases and risks |
 | [`docs/pinout.md`](docs/pinout.md) | Connector A/B/C pins confirmed so far, and what still needs a meter |
 | [`docs/parts.md`](docs/parts.md) | Parts list: bought, on hand, still to buy |
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | `firmware/` | ESP32-S3 bridge firmware (to come) |
-| `tools/` | Sweep scripts and bench tester (to come) |
+| [`tools/`](tools/) | Bus listeners and a frame sender for the bench; sweep scripts to come |
 
 ## Hardware
 
@@ -55,12 +56,13 @@ Full list with prices in [docs/parts.md](docs/parts.md).
 
 ## Plan
 
-1. **Bench power:** find battery, ignition and ground pins; cluster wakes and sweeps its needles.
-2. **Standard J1939:** tach, speedo, coolant, oil pressure, voltage from test frames.
-3. **J1587 and the VECU heartbeat:** clear the communication error pop-up.
-4. **Analog gauges:** fuel and air pressure from pots, then digital pots or a DAC.
-5. **Telltales and display:** turn signals, high beam, warnings (found by sweeping).
-6. **ATS link:** SimHub custom serial device, as in the Mazda build.
+The goal is every gauge and telltale the cluster supports working in game.
+Details in [docs/plan.md](docs/plan.md).
+
+1. **Bench bring-up and listen:** power the cluster and log what it asks for on CAN1 and J1708.
+2. **Sweep and map:** standard J1939 PGNs, Volvo proprietary PGNs and J1587 PIDs, with a camera watching for changes; measure analog gauge ranges.
+3. **ESP32-S3 firmware:** CAN1 and J1708 traffic, analog stand-ins, values over USB serial.
+4. **Game link:** SimHub or scs-sdk bridge from ATS/ETS2 telemetry.
 
 ## License
 
