@@ -35,6 +35,7 @@ the bridge has to fake that ECU too.
 | [`docs/plan.md`](docs/plan.md) | The four-step plan from bench to game |
 | [`docs/feasibility.md`](docs/feasibility.md) | Can it be done, what it costs, phases and risks |
 | [`docs/pinout.md`](docs/pinout.md) | Connector A/B/C pins confirmed so far, and what still needs a meter |
+| [`docs/harness.md`](docs/harness.md) | Annotated photos of the harness connectors, with wire colors and codes per cavity |
 | [`docs/parts.md`](docs/parts.md) | Parts list: bought, on hand, still to buy |
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
