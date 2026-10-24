@@ -6,6 +6,7 @@ which PGNs it asks for (Request, 0xEA00) and which address it claims
 
     python can_listen.py --interface slcan --channel COM5 --log first_power.csv
     python can_listen.py --interface slcan --channel COM5 --poke
+    python can_listen.py --interface gs_usb --channel 0 --log first_power.csv
 
 --poke sends a global Request for Address Claimed from 0xF9 once at start,
 which every J1939 node should answer.
@@ -18,21 +19,20 @@ from collections import defaultdict
 
 import can
 
+import canbus
 import j1939
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--interface", default="slcan", help="python-can interface (slcan, gs_usb, socketcan, virtual)")
-    ap.add_argument("--channel", required=True, help="COM port, can0, etc.")
-    ap.add_argument("--bitrate", type=int, default=250000)
+    canbus.add_bus_args(ap)
     ap.add_argument("--log", help="CSV file to write every frame to")
     ap.add_argument("--poke", action="store_true", help="send a Request for Address Claimed at start")
     ap.add_argument("--quiet", action="store_true", help="only print new PGNs, requests and claims")
     ap.add_argument("--seconds", type=float, help="stop after this many seconds")
     args = ap.parse_args()
 
-    bus = can.Bus(interface=args.interface, channel=args.channel, bitrate=args.bitrate)
+    bus = canbus.open_bus(args)
     log_file = open(args.log, "w", newline="") if args.log else None
     writer = csv.writer(log_file) if log_file else None
     if writer:
@@ -73,7 +73,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        bus.shutdown()
+        canbus.close_bus(bus)
         if log_file:
             log_file.close()
 

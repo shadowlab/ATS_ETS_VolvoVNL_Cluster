@@ -43,6 +43,7 @@ import can
 import cv2
 import numpy as np
 
+import canbus
 import j1939
 
 HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after"]
@@ -484,7 +485,7 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = can.Bus(interface=args.interface, channel=args.channel, bitrate=args.bitrate)
+    bus = canbus.open_bus(args)
     background = []
     for spec in args.background:
         pgn, sa, data = spec.split(":")
@@ -505,7 +506,7 @@ def cmd_sweep(args):
         for task in background:
             task.stop()
         camera.close()
-        bus.shutdown()
+        canbus.close_bus(bus)
 
 
 def main():
@@ -531,9 +532,7 @@ def main():
     camera_args(sub.add_parser("preview", help="live view of what the detector sees"))
     sw = sub.add_parser("sweep", help="run a sweep")
     camera_args(sw)
-    sw.add_argument("--interface", default="slcan")
-    sw.add_argument("--channel", required=True)
-    sw.add_argument("--bitrate", type=int, default=250000)
+    canbus.add_bus_args(sw)
     sw.add_argument("--pgns", required=True, help="hex PGNs and ranges, e.g. FF00-FFFF,FEF1")
     sw.add_argument("--sources", default="00", help="hex source addresses, e.g. 00,03,21")
     sw.add_argument("--payloads", default="00,FF", help="fill bytes or 8-byte hex payloads")
