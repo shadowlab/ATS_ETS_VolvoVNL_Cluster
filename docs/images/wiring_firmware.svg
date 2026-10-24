@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 980" width="1560" height="980" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
-  <title>Bench wiring for sweep testing: 2012 Volvo VNL cluster</title>
+  <title>Stage 2 bench wiring (firmware): 2012 Volvo VNL cluster</title>
   <defs>
     <g id="gnd">
       <line x1="0" y1="0" x2="0" y2="10" stroke="#111" stroke-width="2.5"/>
@@ -32,8 +32,8 @@
   <rect x="0" y="0" width="1560" height="980" fill="#ffffff"/>
 
   <!-- Title -->
-  <text x="30" y="40" font-size="22" font-weight="700">Bench wiring for sweep testing: 2012 Volvo VNL cluster 21844839-P01</text>
-  <text x="30" y="64" class="small">Cluster + CANable 2.0 + ESP32-S3 with SN65HVD230 + XY-485 + logic analyzer. Ring out every harness wire with a meter before power-up (docs/pinout.md).</text>
+  <text x="30" y="40" font-size="22" font-weight="700">Stage 2, firmware: ESP32-S3 drives CAN1 and J1708, CANable monitors</text>
+  <text x="30" y="64" class="small">2012 Volvo VNL cluster 21844839-P01. The ESP32-S3 (native TWAI + SN65HVD230) is the bridge; the CANable only listens. Ring out every harness wire before power-up (docs/pinout.md).</text>
 
   <!-- ===== Bench PSU ===== -->
   <rect class="box" x="30" y="100" width="170" height="170" rx="6"/>
@@ -111,7 +111,7 @@
   <text x="1000" y="298" class="small" text-anchor="middle">H</text>
   <text x="1040" y="298" class="small" text-anchor="middle">L</text>
   <text x="1060" y="322" class="title" text-anchor="middle">CANable 2.0</text>
-  <text x="1060" y="342" class="small" text-anchor="middle">candleLight, gs_usb</text>
+  <text x="1060" y="342" class="small" text-anchor="middle">monitor only (listen)</text>
   <text x="1060" y="360" class="small" text-anchor="middle">120 Ω switch: OFF</text>
   <text x="1030" y="388" class="small" text-anchor="middle">USB → PC</text>
   <text x="1140" y="394" class="small" text-anchor="middle">GND</text>
