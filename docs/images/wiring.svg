@@ -1,0 +1,250 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 980" width="1560" height="980" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+  <title>Bench wiring for sweep testing: 2012 Volvo VNL cluster</title>
+  <defs>
+    <g id="gnd">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#111" stroke-width="2.5"/>
+      <line x1="-12" y1="10" x2="12" y2="10" stroke="#111" stroke-width="2.5"/>
+      <line x1="-8" y1="15" x2="8" y2="15" stroke="#111" stroke-width="2.5"/>
+      <line x1="-4" y1="20" x2="4" y2="20" stroke="#111" stroke-width="2.5"/>
+    </g>
+  </defs>
+  <style>
+    .box { fill: #f7f7f4; stroke: #333; stroke-width: 2; }
+    .title { font-weight: 700; font-size: 16px; }
+    .small { font-size: 12.5px; fill: #333; }
+    .pin { font-size: 13px; font-weight: 600; }
+    .warn { font-size: 12.5px; fill: #b00020; font-weight: 600; }
+    .w { fill: none; stroke-width: 3; stroke-linejoin: round; }
+    .v12 { stroke: #d62828; }
+    .gndw { stroke: #111; }
+    .canh { stroke: #d4a000; }
+    .canl { stroke: #1a9b3c; }
+    .ja { stroke: #7b3fbf; }
+    .jb { stroke: #2a6fdb; }
+    .v33 { stroke: #f08c00; }
+    .v5 { stroke: #e0569b; }
+    .sig { stroke: #555; }
+    .dot { fill: #111; }
+    .probe { fill: #fff; stroke: #0a8f8f; stroke-width: 2.5; }
+    .ptxt { font-size: 12px; font-weight: 700; fill: #0a8f8f; }
+  </style>
+
+  <rect x="0" y="0" width="1560" height="980" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="30" y="40" font-size="22" font-weight="700">Bench wiring for sweep testing: 2012 Volvo VNL cluster 21844839-P01</text>
+  <text x="30" y="64" class="small">Cluster + CANable 2.0 + ESP32-S3 with SN65HVD230 + XY-485 + logic analyzer. Ring out every harness wire with a meter before power-up (docs/pinout.md).</text>
+
+  <!-- ===== Bench PSU ===== -->
+  <rect class="box" x="30" y="100" width="170" height="170" rx="6"/>
+  <text x="115" y="128" class="title" text-anchor="middle">Bench PSU</text>
+  <text x="115" y="150" class="small" text-anchor="middle">12–13.5 V</text>
+  <text x="115" y="168" class="small" text-anchor="middle">current limit ≈ 1 A</text>
+  <text x="115" y="186" class="small" text-anchor="middle">output floating</text>
+  <text x="115" y="204" class="small" text-anchor="middle">(− not tied to earth)</text>
+  <text x="188" y="135" class="pin" text-anchor="end" fill="#d62828">+</text>
+  <text x="188" y="245" class="pin" text-anchor="end">−</text>
+
+  <!-- + rail and three fused, switched feeds -->
+  <path class="w v12" d="M200 130 H240 M240 130 V250"/>
+  <circle class="dot" cx="240" cy="190" r="4"/><circle class="dot" cx="240" cy="130" r="4"/>
+  <!-- feed lines -->
+  <path class="w v12" d="M240 130 H280 M330 130 H400 M450 130 H620"/>
+  <path class="w v12" d="M240 190 H280 M330 190 H400 M450 190 H620"/>
+  <path class="w v12" d="M240 250 H280 M330 250 H400 M450 250 H620"/>
+  <!-- fuses -->
+  <g stroke="#333" stroke-width="2" fill="#fff">
+    <rect x="280" y="122" width="50" height="16" rx="3"/><rect x="280" y="182" width="50" height="16" rx="3"/><rect x="280" y="242" width="50" height="16" rx="3"/>
+  </g>
+  <g stroke="#333" stroke-width="1.5"><line x1="280" y1="130" x2="330" y2="130"/><line x1="280" y1="190" x2="330" y2="190"/><line x1="280" y1="250" x2="330" y2="250"/></g>
+  <text x="305" y="114" class="small" text-anchor="middle">F1 2 A</text>
+  <text x="305" y="174" class="small" text-anchor="middle">F2 1 A</text>
+  <text x="305" y="234" class="small" text-anchor="middle">F3 1 A</text>
+  <!-- switches -->
+  <g stroke="#333" stroke-width="2.5" fill="#fff">
+    <circle cx="404" cy="130" r="4"/><circle cx="446" cy="130" r="4"/><line x1="407" y1="128" x2="444" y2="114"/>
+    <circle cx="404" cy="190" r="4"/><circle cx="446" cy="190" r="4"/><line x1="407" y1="188" x2="444" y2="174"/>
+    <circle cx="404" cy="250" r="4"/><circle cx="446" cy="250" r="4"/><line x1="407" y1="248" x2="444" y2="234"/>
+  </g>
+  <text x="470" y="120" class="small">S1 BATT</text>
+  <text x="470" y="180" class="small">S2 KEY (F15)</text>
+  <text x="470" y="240" class="small">S3 ACC</text>
+
+  <!-- PSU − to ground bus -->
+  <path class="w gndw" d="M200 240 H215 V300 H560 V900"/>
+
+  <!-- ===== Cluster ===== -->
+  <rect class="box" x="620" y="100" width="280" height="480" rx="8"/>
+  <text x="760" y="370" class="title" text-anchor="middle" font-size="18">Volvo VNL cluster</text>
+  <text x="760" y="392" class="small" text-anchor="middle">21844839-P01 (2012)</text>
+  <text x="760" y="420" class="small" text-anchor="middle">A:10 / A:22 (CAN3): leave open</text>
+  <text x="760" y="438" class="small" text-anchor="middle">Connector C: not needed</text>
+  <text x="630" y="135" class="pin">A:1 Battery +12 V</text>
+  <text x="630" y="195" class="pin">A:3 F15 key-switch +12 V</text>
+  <text x="630" y="255" class="pin">B:23 ACC +12 V</text>
+  <text x="630" y="325" class="pin">A:2 Ground (only one)</text>
+  <text x="890" y="175" class="pin" text-anchor="end">A:15 CAN1 H</text>
+  <text x="890" y="215" class="pin" text-anchor="end">A:16 CAN1 L</text>
+  <text x="890" y="475" class="pin" text-anchor="end">A:17 J1708 A (+)</text>
+  <text x="890" y="515" class="pin" text-anchor="end">A:18 J1708 B (−)</text>
+
+  <!-- A:2 to ground bus -->
+  <path class="w gndw" d="M620 320 H560"/>
+  <circle class="dot" cx="560" cy="320" r="4"/>
+
+  <!-- ===== CAN1 bus ===== -->
+  <path class="w canh" d="M900 170 H1480"/>
+  <path class="w canl" d="M900 210 H1480"/>
+  <text x="915" y="160" class="small">CAN1: H = yellow wire, L = green wire · J1939, 250 kbit/s · twisted pair, short stubs</text>
+  <!-- far-end terminator -->
+  <rect x="1472" y="178" width="16" height="24" fill="#fff" stroke="#333" stroke-width="2"/>
+  <circle class="dot" cx="1480" cy="170" r="4"/><circle class="dot" cx="1480" cy="210" r="4"/>
+  <text x="1480" y="232" class="small" text-anchor="middle">120 Ω</text>
+  <text x="1480" y="248" class="small" text-anchor="middle">end, only</text>
+  <text x="1480" y="263" class="small" text-anchor="middle">if needed</text>
+
+  <!-- CANable taps -->
+  <path class="w canh" d="M1000 170 V280"/>
+  <path class="w canl" d="M1040 210 V280"/>
+  <circle class="dot" cx="1000" cy="170" r="4"/><circle class="dot" cx="1040" cy="210" r="4"/>
+  <rect class="box" x="960" y="280" width="200" height="120" rx="6"/>
+  <text x="1000" y="298" class="small" text-anchor="middle">H</text>
+  <text x="1040" y="298" class="small" text-anchor="middle">L</text>
+  <text x="1060" y="322" class="title" text-anchor="middle">CANable 2.0</text>
+  <text x="1060" y="342" class="small" text-anchor="middle">candleLight, gs_usb</text>
+  <text x="1060" y="360" class="small" text-anchor="middle">120 Ω switch: OFF</text>
+  <text x="1030" y="388" class="small" text-anchor="middle">USB → PC</text>
+  <text x="1140" y="394" class="small" text-anchor="middle">GND</text>
+  <path class="w gndw" d="M1140 400 V410"/>
+  <use href="#gnd" x="1140" y="410"/>
+  <text x="1126" y="430" class="small" text-anchor="end">to common GND</text>
+
+  <!-- SN65HVD230 taps -->
+  <path class="w canh" d="M1280 170 V280"/>
+  <path class="w canl" d="M1320 210 V280"/>
+  <circle class="dot" cx="1280" cy="170" r="4"/><circle class="dot" cx="1320" cy="210" r="4"/>
+  <rect class="box" x="1240" y="280" width="200" height="120" rx="6"/>
+  <text x="1280" y="298" class="small" text-anchor="middle">CANH</text>
+  <text x="1325" y="298" class="small" text-anchor="middle">CANL</text>
+  <text x="1340" y="322" class="title" text-anchor="middle">SN65HVD230</text>
+  <text x="1340" y="340" class="small" text-anchor="middle">CAN transceiver, 3.3 V</text>
+  <text x="1340" y="358" class="small" text-anchor="middle">board may carry its own</text>
+  <text x="1340" y="374" class="small" text-anchor="middle">120 Ω: measure it</text>
+  <text x="1262" y="394" class="small" text-anchor="middle">3V3</text>
+  <text x="1310" y="394" class="small" text-anchor="middle">GND</text>
+  <text x="1360" y="394" class="small" text-anchor="middle">CTX</text>
+  <text x="1410" y="394" class="small" text-anchor="middle">CRX</text>
+
+  <!-- SN65HVD230 to ESP32 -->
+  <path class="w v33" d="M1260 400 V620"/>
+  <path class="w gndw" d="M1310 400 V620"/>
+  <path class="w sig" d="M1360 400 V620"/>
+  <path class="w sig" d="M1410 400 V620"/>
+  <text transform="translate(1252 520) rotate(-90)" class="small" text-anchor="middle">3.3 V</text>
+  <text transform="translate(1352 470) rotate(-90)" class="small" text-anchor="middle">TX →</text>
+  <text transform="translate(1402 470) rotate(-90)" class="small" text-anchor="middle">← RX</text>
+  <circle class="probe" cx="1360" cy="560" r="9"/><text x="1374" y="584" class="ptxt">CH0</text>
+  <circle class="probe" cx="1410" cy="560" r="9"/><text x="1424" y="584" class="ptxt">CH1</text>
+
+  <!-- ===== J1708 ===== -->
+  <path class="w ja" d="M900 470 H1000 V620"/>
+  <path class="w jb" d="M900 510 H950 V620"/>
+  <text x="1012" y="500" class="small">J1708 / J1587, 9600 baud</text>
+  <text x="1012" y="518" class="small">twisted pair, NO terminator</text>
+
+  <!-- XY-485 -->
+  <rect class="box" x="860" y="620" width="220" height="170" rx="6"/>
+  <text x="950" y="638" class="small" text-anchor="middle">B</text>
+  <text x="1000" y="638" class="small" text-anchor="middle">A</text>
+  <text x="872" y="666" class="title">XY-485</text>
+  <text x="872" y="686" class="small">MAX485, auto direction</text>
+  <text x="872" y="706" class="warn">R9 120 Ω REMOVED</text>
+  <text x="872" y="724" class="small">R1/R2 4.7k bias: keep</text>
+  <text x="872" y="742" class="small">VCC 5 V, onboard reg</text>
+  <text x="872" y="760" class="small">TXD/RXD at 3.3 V</text>
+  <text x="1072" y="664" class="small" text-anchor="end">VCC</text>
+  <text x="1072" y="704" class="small" text-anchor="end">TXD</text>
+  <text x="1072" y="744" class="small" text-anchor="end">RXD</text>
+  <text x="972" y="784" class="small" text-anchor="middle">GND</text>
+  <path class="w gndw" d="M960 790 V900"/>
+
+  <!-- XY-485 to ESP32 -->
+  <path class="w v5" d="M1080 660 H1180"/>
+  <path class="w sig" d="M1080 700 H1180"/>
+  <path class="w sig" d="M1080 740 H1180"/>
+  <text x="1130" y="652" class="small" text-anchor="middle">5 V</text>
+  <text x="1104" y="692" class="small" text-anchor="middle">←</text>
+  <text x="1104" y="732" class="small" text-anchor="middle">→</text>
+  <circle class="probe" cx="1140" cy="700" r="9"/><text x="1132" y="722" class="ptxt" text-anchor="start" dx="-4">CH2</text>
+  <circle class="probe" cx="1140" cy="740" r="9"/><text x="1132" y="762" class="ptxt" text-anchor="start" dx="-4">CH3</text>
+
+  <!-- ===== ESP32-S3 ===== -->
+  <rect class="box" x="1180" y="620" width="300" height="230" rx="8"/>
+  <text x="1262" y="638" class="small" text-anchor="middle">3V3</text>
+  <text x="1310" y="638" class="small" text-anchor="middle">GND</text>
+  <text x="1360" y="638" class="small" text-anchor="middle">IO4</text>
+  <text x="1410" y="638" class="small" text-anchor="middle">IO5</text>
+  <text x="1188" y="665" class="small">5V</text>
+  <text x="1188" y="705" class="small">IO17</text>
+  <text x="1188" y="745" class="small">IO18</text>
+  <text x="1330" y="672" class="title" text-anchor="middle">ESP32-S3 dev board</text>
+  <text x="1240" y="700" class="small">IO4 TWAI TX → CTX</text>
+  <text x="1240" y="718" class="small">IO5 TWAI RX ← CRX</text>
+  <text x="1240" y="736" class="small">IO17 UART1 TX → XY-485</text>
+  <text x="1240" y="754" class="small">IO18 UART1 RX ← XY-485</text>
+  <text x="1240" y="772" class="small">IO6 sweep marker (CH4)</text>
+  <text x="1240" y="796" class="warn">GPIOs are 3.3 V only</text>
+  <text x="1440" y="838" class="small" text-anchor="middle">USB → PC</text>
+  <text x="1342" y="842" class="small" text-anchor="middle">GND</text>
+  <path class="w gndw" d="M1330 850 V900"/>
+
+  <!-- ===== Logic analyzer ===== -->
+  <rect class="box" x="625" y="620" width="220" height="230" rx="6"/>
+  <text x="745" y="644" class="title" text-anchor="middle">Logic analyzer, 8 ch</text>
+  <text x="641" y="668" class="pin" fill="#0a8f8f">CH0</text><text x="685" y="668" class="small">IO4 → CTX (CAN TX)</text>
+  <text x="641" y="688" class="pin" fill="#0a8f8f">CH1</text><text x="685" y="688" class="small">IO5 ← CRX (CAN RX)</text>
+  <text x="641" y="708" class="pin" fill="#0a8f8f">CH2</text><text x="685" y="708" class="small">IO17 UART TX (J1708)</text>
+  <text x="641" y="728" class="pin" fill="#0a8f8f">CH3</text><text x="685" y="728" class="small">IO18 UART RX (J1708)</text>
+  <text x="641" y="748" class="pin" fill="#0a8f8f">CH4</text><text x="685" y="748" class="small">IO6 sweep marker</text>
+  <text x="641" y="768" class="pin" fill="#888">CH5–7</text><text x="700" y="768" class="small">spare</text>
+  <text x="641" y="792" class="warn">Logic side only: never</text>
+  <text x="641" y="808" class="warn">12 V, CANH/L or J1708 A/B</text>
+  <text x="755" y="842" class="small" text-anchor="middle">GND</text>
+  <path class="w gndw" d="M745 850 V900"/>
+
+  <!-- ===== PC ===== -->
+  <rect class="box" x="30" y="320" width="170" height="200" rx="6" stroke-dasharray="6 4"/>
+  <text x="115" y="346" class="title" text-anchor="middle">PC (USB)</text>
+  <text x="42" y="372" class="small">CANable: can_listen,</text>
+  <text x="42" y="388" class="small">  sweep_watch</text>
+  <text x="42" y="410" class="small">ESP32-S3: USB serial</text>
+  <text x="42" y="432" class="small">Analyzer: PulseView</text>
+  <text x="42" y="454" class="small">Phone: DroidCam</text>
+  <text x="42" y="482" class="small">USB grounds join the</text>
+  <text x="42" y="498" class="small">bench ground through it</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="30" y="560" width="320" height="300" rx="6" fill="#fff" stroke="#999" stroke-width="1.5"/>
+  <text x="46" y="586" class="title">Legend</text>
+  <g>
+    <line x1="46" y1="608" x2="96" y2="608" class="w v12"/><text x="108" y="613" class="small">+12 V (fused, switched)</text>
+    <line x1="46" y1="632" x2="96" y2="632" class="w gndw"/><text x="108" y="637" class="small">Ground (one common ground)</text>
+    <line x1="46" y1="656" x2="96" y2="656" class="w canh"/><text x="108" y="661" class="small">CAN1 H</text>
+    <line x1="46" y1="680" x2="96" y2="680" class="w canl"/><text x="108" y="685" class="small">CAN1 L</text>
+    <line x1="46" y1="704" x2="96" y2="704" class="w ja"/><text x="108" y="709" class="small">J1708 A (+)</text>
+    <line x1="46" y1="728" x2="96" y2="728" class="w jb"/><text x="108" y="733" class="small">J1708 B (−)</text>
+    <line x1="46" y1="752" x2="96" y2="752" class="w v33"/><text x="108" y="757" class="small">3.3 V supply</text>
+    <line x1="46" y1="776" x2="96" y2="776" class="w v5"/><text x="108" y="781" class="small">5 V supply (ESP32 5V/VBUS pin)</text>
+    <line x1="46" y1="800" x2="96" y2="800" class="w sig"/><text x="108" y="805" class="small">3.3 V logic signal</text>
+    <circle class="dot" cx="71" cy="824" r="4"/><text x="108" y="829" class="small">Joined (a crossing without a dot is not)</text>
+    <circle class="probe" cx="71" cy="846" r="7"/><text x="108" y="851" class="small">Logic analyzer probe point</text>
+  </g>
+
+  <!-- ===== Ground bus ===== -->
+  <path class="w gndw" d="M560 900 H1330" stroke-width="5"/>
+  <circle class="dot" cx="560" cy="900" r="5"/><circle class="dot" cx="745" cy="900" r="5"/>
+  <circle class="dot" cx="960" cy="900" r="5"/>
+  <use href="#gnd" x="650" y="900"/>
+  <text x="600" y="940" class="pin">COMMON GROUND: PSU −, cluster A:2, XY-485, ESP32-S3 (and SN65HVD230), analyzer, CANable</text>
+  <text x="600" y="960" class="small">Wire the GND of each board to this bus; don't rely on the USB cable alone.</text>
+</svg>
