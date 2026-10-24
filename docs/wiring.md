@@ -59,8 +59,8 @@ The other end depends on the stage:
 
 - **Stage 1:** the CANable is the far end. Fit its 120 Ω jumper.
 - **Stage 2:** the SN65HVD230 is the far end. Most of these boards carry
-  their own 120 Ω (often marked R2, "121"), so keep it and turn the
-  CANable's jumper off.
+  their own 120 Ω (often marked R2, "121"), so keep it and remove
+  the CANable's jumper.
 
 With everything wired and the power off, CAN H to CAN L should read about
 60 Ω. About 40 Ω means three terminators: pull the CANable's jumper.
