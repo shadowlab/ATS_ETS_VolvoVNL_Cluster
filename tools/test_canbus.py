@@ -32,9 +32,21 @@ class TimingTest(unittest.TestCase):
 
 
 class FakeDevice:
+    """Like WinUSB: a second open while the first handle is held is refused."""
+
+    holders = 0
+
     def __init__(self):
-        self.device_capability = capability()
+        self._capability = capability()
         self.timing = None
+        self.gs_usb = self
+
+    @property
+    def device_capability(self):
+        if FakeDevice.holders:
+            raise PermissionError("Access denied (insufficient permissions)")
+        FakeDevice.holders += 1
+        return self._capability
 
     def set_timing(self, prop_seg, phase_seg1, phase_seg2, sjw, brp):
         self.timing = (prop_seg, phase_seg1, phase_seg2, sjw, brp)
@@ -51,19 +63,47 @@ class GsUsbTest(unittest.TestCase):
         if importlib.util.find_spec("gs_usb") is None:
             self.skipTest("gs_usb not installed")
 
+    def patches(self, devices):
+        def dispose(dev):
+            FakeDevice.holders = 0
+        FakeDevice.holders = 0
+        return (mock.patch("gs_usb.gs_usb.GsUsb.scan", return_value=devices),
+                mock.patch.object(canbus, "prime_libusb"),
+                mock.patch("usb.util.dispose_resources", side_effect=dispose))
+
     def test_open_uses_our_timing_and_close_survives(self):
         dev = FakeDevice()
         original = can.BitTiming.__dict__["from_sample_point"]
-        with mock.patch("gs_usb.gs_usb.GsUsb.scan", return_value=[dev]), mock.patch.object(canbus, "prime_libusb"):
+        p1, p2, p3 = self.patches([dev])
+        with p1, p2, p3:
             bus = canbus.open_gs_usb(0, 250_000)
             self.assertEqual(dev.timing, (1, 15, 3, 3, 34))
             self.assertIs(can.BitTiming.__dict__["from_sample_point"], original)
             canbus.close_bus(bus)
 
     def test_missing_device(self):
-        with mock.patch("gs_usb.gs_usb.GsUsb.scan", return_value=[]), mock.patch.object(canbus, "prime_libusb"):
+        p1, p2, p3 = self.patches([])
+        with p1, p2, p3:
             with self.assertRaises(SystemExit):
                 canbus.open_gs_usb(0, 250_000)
+
+    def test_failed_open_is_marked_shut_down(self):
+        from can.interfaces.gs_usb import GsUsbBus
+
+        made = []
+        real_new = GsUsbBus.__new__
+
+        def new(cls, *a, **k):
+            made.append(real_new(cls))
+            return made[-1]
+
+        dev = FakeDevice()
+        dev.set_timing = mock.Mock(side_effect=OSError("boom"))
+        p1, p2, p3 = self.patches([dev])
+        with p1, p2, p3, mock.patch.object(GsUsbBus, "__new__", new):
+            with self.assertRaises(OSError):
+                canbus.open_gs_usb(0, 250_000)
+        self.assertTrue(made[0]._is_shutdown)
 
 
 if __name__ == "__main__":
