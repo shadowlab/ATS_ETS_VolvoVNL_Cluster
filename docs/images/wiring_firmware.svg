@@ -112,7 +112,7 @@
   <text x="1040" y="298" class="small" text-anchor="middle">L</text>
   <text x="1060" y="322" class="title" text-anchor="middle">CANable 2.0</text>
   <text x="1060" y="342" class="small" text-anchor="middle">monitor only (listen)</text>
-  <text x="1060" y="360" class="small" text-anchor="middle">120 Ω switch: OFF</text>
+  <text x="1060" y="360" class="small" text-anchor="middle">120 Ω jumper: OFF (removed)</text>
   <text x="1030" y="388" class="small" text-anchor="middle">USB → PC</text>
   <text x="1140" y="394" class="small" text-anchor="middle">GND</text>
   <path class="w gndw" d="M1140 400 V410"/>

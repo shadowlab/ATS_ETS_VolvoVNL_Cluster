@@ -57,13 +57,13 @@ end. First measure A:15 to A:16 on the cluster alone, power off:
 
 The other end depends on the stage:
 
-- **Stage 1:** the CANable is the far end. Turn its termination switch ON.
+- **Stage 1:** the CANable is the far end. Fit its 120 Ω jumper.
 - **Stage 2:** the SN65HVD230 is the far end. Most of these boards carry
   their own 120 Ω (often marked R2, "121"), so keep it and turn the
-  CANable's switch OFF.
+  CANable's jumper off.
 
 With everything wired and the power off, CAN H to CAN L should read about
-60 Ω. About 40 Ω means three terminators: turn the CANable's switch off.
+60 Ω. About 40 Ω means three terminators: pull the CANable's jumper.
 
 ## J1708 / J1587 (9600 baud)
 
