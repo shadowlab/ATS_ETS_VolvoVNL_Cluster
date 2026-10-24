@@ -43,6 +43,7 @@ import can
 import cv2
 import numpy as np
 
+import canbus
 import j1939
 
 HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after"]
@@ -97,8 +98,20 @@ def key(sa, pgn, payload):
     return f"{sa:02X}:{pgn:05X}:{payload.hex()}"
 
 
-def open_capture(source, width=None, height=None):
-    cap = cv2.VideoCapture(int(source) if str(source).isdigit() else source)
+BACKENDS = {
+    "auto": cv2.CAP_ANY,
+    "dshow": cv2.CAP_DSHOW,
+    "msmf": cv2.CAP_MSMF,
+    "v4l2": cv2.CAP_V4L2,
+    "ffmpeg": cv2.CAP_FFMPEG,
+}
+
+
+def open_capture(source, width=None, height=None, backend="auto"):
+    if str(source).isdigit():
+        cap = cv2.VideoCapture(int(source), BACKENDS[backend])
+    else:
+        cap = cv2.VideoCapture(source)
     if width:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     if height:
@@ -108,17 +121,47 @@ def open_capture(source, width=None, height=None):
     return cap
 
 
+def warm_up(cap, seconds=2.0):
+    """Read and drop frames for a while; many cameras start with blank or
+    placeholder frames. Returns the last good frame, or None."""
+    frame = None
+    end = time.time() + seconds
+    while time.time() < end:
+        ok, f = cap.read()
+        if ok:
+            frame = f
+        else:
+            time.sleep(0.05)
+    return frame
+
+
+ROTATIONS = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def rotate(frame, degrees):
+    """Turn a frame clockwise by 0, 90, 180 or 270 degrees."""
+    code = ROTATIONS[degrees]
+    return frame if code is None else cv2.rotate(frame, code)
+
+
+def looks_blank(frame):
+    """True for a picture that's nearly one solid color, like a placeholder."""
+    return float(frame.std()) < 8
+
+
 class Camera:
     """Reads frames on a thread so frame() always returns a fresh picture."""
 
-    def __init__(self, source, width=None, height=None):
-        self.cap = open_capture(source, width, height)
+    def __init__(self, source, width=None, height=None, backend="auto", warmup=2.0, rotation=0):
+        self.cap = open_capture(source, width, height, backend)
+        self.rotation = rotation
         self.lock = threading.Condition()
         self.latest = None
         self.count = 0
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+        time.sleep(warmup)
 
     def _run(self):
         while self.running:
@@ -126,6 +169,7 @@ class Camera:
             if not ok:
                 time.sleep(0.05)
                 continue
+            frame = rotate(frame, self.rotation)
             with self.lock:
                 self.latest = frame
                 self.count += 1
@@ -366,12 +410,15 @@ def load_ignore(path):
 
 
 def cmd_pick(args):
-    cap = open_capture(args.camera, args.width, args.height)
-    for _ in range(10):
-        ok, frame = cap.read()
+    cap = open_capture(args.camera, args.width, args.height, args.backend)
+    frame = warm_up(cap)
     cap.release()
-    if not ok:
+    if frame is None:
         raise SystemExit("No picture from the camera")
+    frame = rotate(frame, args.rotate)
+    if looks_blank(frame):
+        print("Warning: the picture is one solid color. This may be the wrong camera or a placeholder; "
+              "try 'python sweep_watch.py cameras'.")
     rects = cv2.selectROIs("Drag a box around each area to ignore, Enter after each, Esc when done", frame)
     cv2.destroyAllWindows()
     rects = [list(map(int, r)) for r in rects]
@@ -380,8 +427,36 @@ def cmd_pick(args):
     print(f"Saved {len(rects)} ignore areas to {args.ignore}")
 
 
+def cmd_cameras(args):
+    """Save a snapshot from each camera number so you can see which is which."""
+    os.makedirs("cameras", exist_ok=True)
+    backends = list(BACKENDS) if args.backend == "auto" else [args.backend]
+    found = 0
+    for index in range(args.max):
+        for backend in backends:
+            if backend in ("v4l2", "ffmpeg") and os.name == "nt":
+                continue
+            cap = cv2.VideoCapture(index, BACKENDS[backend])
+            if not cap.isOpened():
+                cap.release()
+                continue
+            frame = warm_up(cap, 1.5)
+            cap.release()
+            if frame is None:
+                print(f"camera {index} ({backend}): opens but sends no picture")
+                continue
+            path = os.path.join("cameras", f"camera_{index}_{backend}.jpg")
+            cv2.imwrite(path, frame)
+            h, w = frame.shape[:2]
+            note = "  solid color, likely a placeholder" if looks_blank(frame) else ""
+            print(f"camera {index} ({backend}): {w}x{h}, saved {path}{note}")
+            found += 1
+    if not found:
+        print("No cameras found. Check that the DroidCam PC client is connected to the phone.")
+
+
 def cmd_preview(args):
-    camera = Camera(args.camera, args.width, args.height)
+    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     rebaseline(camera, detector)
     print("Live view: changed areas are boxed in red. b = new baseline, q = quit")
@@ -410,14 +485,14 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = can.Bus(interface=args.interface, channel=args.channel, bitrate=args.bitrate)
+    bus = canbus.open_bus(args)
     background = []
     for spec in args.background:
         pgn, sa, data = spec.split(":")
         payload = bytes.fromhex(data.replace(" ", "")).ljust(8, b"\xFF")
         msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload, is_extended_id=True)
         background.append(bus.send_periodic(msg, 0.1))
-    camera = Camera(args.camera, args.width, args.height)
+    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
         if background:
@@ -431,7 +506,7 @@ def cmd_sweep(args):
         for task in background:
             task.stop()
         camera.close()
-        bus.shutdown()
+        canbus.close_bus(bus)
 
 
 def main():
@@ -442,17 +517,22 @@ def main():
         p.add_argument("--camera", default="0", help="camera number or stream address")
         p.add_argument("--width", type=int)
         p.add_argument("--height", type=int)
+        p.add_argument("--backend", choices=list(BACKENDS), default="auto",
+                       help="camera driver for camera numbers; on Windows try dshow or msmf")
+        p.add_argument("--rotate", type=int, choices=list(ROTATIONS), default=0,
+                       help="turn the picture clockwise by this many degrees")
         p.add_argument("--ignore", default="ignore.json", help="file of areas to ignore (from pick)")
         p.add_argument("--pixel-threshold", type=int, default=30, help="brightness change that counts (0-255)")
         p.add_argument("--min-area", type=float, default=0.002, help="fraction of pixels that must change")
 
+    cams = sub.add_parser("cameras", help="save a snapshot from each camera number")
+    cams.add_argument("--max", type=int, default=6, help="camera numbers to try, from 0")
+    cams.add_argument("--backend", choices=list(BACKENDS), default="auto")
     camera_args(sub.add_parser("pick", help="mark areas of the picture to ignore"))
     camera_args(sub.add_parser("preview", help="live view of what the detector sees"))
     sw = sub.add_parser("sweep", help="run a sweep")
     camera_args(sw)
-    sw.add_argument("--interface", default="slcan")
-    sw.add_argument("--channel", required=True)
-    sw.add_argument("--bitrate", type=int, default=250000)
+    canbus.add_bus_args(sw)
     sw.add_argument("--pgns", required=True, help="hex PGNs and ranges, e.g. FF00-FFFF,FEF1")
     sw.add_argument("--sources", default="00", help="hex source addresses, e.g. 00,03,21")
     sw.add_argument("--payloads", default="00,FF", help="fill bytes or 8-byte hex payloads")
@@ -464,7 +544,7 @@ def main():
     sw.add_argument("--recover", type=float, default=5.0, help="seconds to wait for idle after a hit")
     sw.add_argument("--out", help="run folder (reuse one to resume)")
     args = ap.parse_args()
-    {"pick": cmd_pick, "preview": cmd_preview, "sweep": cmd_sweep}[args.cmd](args)
+    {"cameras": cmd_cameras, "pick": cmd_pick, "preview": cmd_preview, "sweep": cmd_sweep}[args.cmd](args)
 
 
 if __name__ == "__main__":

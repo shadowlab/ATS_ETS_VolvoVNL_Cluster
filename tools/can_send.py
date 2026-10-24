@@ -12,6 +12,7 @@ import time
 
 import can
 
+import canbus
 import j1939
 
 
@@ -21,9 +22,7 @@ def parse_hex(text):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--interface", default="slcan")
-    ap.add_argument("--channel", required=True)
-    ap.add_argument("--bitrate", type=int, default=250000)
+    canbus.add_bus_args(ap)
     ap.add_argument("--pgn", required=True, help="PGN in hex, e.g. F004")
     ap.add_argument("--sa", default="00", help="source address in hex (default 00, engine)")
     ap.add_argument("--da", default="FF", help="destination for PDU1 PGNs, hex (default FF, global)")
@@ -38,7 +37,7 @@ def main():
     msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=True)
     print(f"{can_id:08X}  {data.hex(' ')}  {j1939.describe(can_id, data)}")
 
-    bus = can.Bus(interface=args.interface, channel=args.channel, bitrate=args.bitrate)
+    bus = canbus.open_bus(args)
     try:
         if args.period <= 0:
             bus.send(msg)
@@ -50,7 +49,7 @@ def main():
         except KeyboardInterrupt:
             task.stop()
     finally:
-        bus.shutdown()
+        canbus.close_bus(bus)
 
 
 if __name__ == "__main__":

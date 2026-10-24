@@ -9,8 +9,8 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
 | `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
-| `j1939.py`, `j1587.py` | Shared helpers |
-| `test_tools.py`, `test_sweep_watch.py` | Offline checks: `python -m unittest test_tools test_sweep_watch` |
+| `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
+| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_sweep_watch` |
 
 ## First power-up session
 
@@ -23,7 +23,8 @@ python can_listen.py --interface slcan --channel COM5 --log first_power_can.csv 
 python j1708_listen.py --port COM6 --log first_power_j1708.csv
 ```
 
-Use `--interface gs_usb` instead if the CANable runs candleLight firmware.
+With candleLight firmware on the CANable, use `--interface gs_usb --channel 0`
+instead (see [CANable 2.0 on Windows](#canable-20-on-windows-candlelight)).
 After a minute, Ctrl+C prints a summary. Run `can_listen.py` again with
 `--poke` to ask every node to claim its address.
 
@@ -36,6 +37,36 @@ python can_send.py --channel COM5 --pgn F004 --sa 00 --data "FF FF FF 40 1F FF F
 
 Save the logs, and copy what the cluster requested into
 [docs/messages.md](../docs/messages.md).
+
+## CANable 2.0 on Windows (candleLight)
+
+candleLight firmware makes the CANable a native USB device instead of a COM
+port, which python-can reaches through its `gs_usb` interface.
+
+1. Flash candleLight with the CANable updater (canable.io/updater), if it
+   still runs slcan.
+2. In [Zadig](https://zadig.akeo.ie/), choose Options > List All Devices,
+   select the CANable (it shows as a gs_usb or candleLight device) and
+   install the **WinUSB** driver.
+3. `pip install -r requirements.txt`. This brings in `libusb-package`,
+   which supplies the libusb DLL. Without it the scan reports
+   "Devices found: 0".
+4. Run any tool with `--interface gs_usb --channel 0`:
+
+```
+python can_listen.py --interface gs_usb --channel 0 --log first_power_can.csv --quiet
+```
+
+The tools work out the bit timing from the clock the device reports and
+print it. On the CANable 2.0 (170 MHz) at 250 kbit/s that's BRP 34, TSEG1
+16, TSEG2 3, SJW 3, an 85% sample point. python-can's own choice of 87.5%
+can't be hit at that clock, which is where "No suitable bit timings found"
+comes from. Use `--sample-point` to aim elsewhere, or `--fclk` if a device
+reports no clock.
+
+If Python crashes with an access violation when a tool exits, look for a
+stray `libusb-1.0.dll` next to `python.exe` (or anywhere else on PATH) and
+remove or rename it, so only the copy from `libusb-package` gets loaded.
 
 ## Camera sweep
 
@@ -86,3 +117,23 @@ python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF23 --sources 21 -
 ```
 
 Copy confirmed results into [docs/messages.md](../docs/messages.md).
+
+### If the picture is wrong
+
+Run `python sweep_watch.py cameras`. It saves a snapshot from every camera
+number and driver into `cameras/`, so you can see which number is the phone.
+A solid orange or gray picture is usually DroidCam's placeholder, which it
+shows when the phone isn't streaming: open the DroidCam app on the phone and
+connect from the DroidCam PC client first. For USB, the phone needs Developer
+options with **USB debugging** turned on and the "Allow USB debugging?" prompt
+accepted, or the PC client lists no devices. On Windows, if a number shows the
+right camera in one driver but not another, pass that driver, for example
+`--backend dshow`.
+
+If the phone is mounted upside down or sideways, add `--rotate 180` (or 90
+or 270) to `pick`, `preview` and `sweep`. Use the same value for all three,
+since the ignore areas are saved in the turned picture's coordinates.
+
+You can also skip the virtual webcam and read the phone's own stream. Close
+the DroidCam PC client, then use the address the phone app shows:
+`--camera http://<phone-ip>:4747/video`.
