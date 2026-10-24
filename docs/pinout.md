@@ -21,7 +21,7 @@ A, B, C below).
 | A:16 | DL1LN3 | J1939 CAN1 L | CAN transceiver CANL |
 | A:17 | DL4HN15 | J1708/J1587 A (+) | XY-485 A |
 | A:18 | DL4LN15 | J1708/J1587 B (−) | XY-485 B |
-| A:21 | PD21A1 | Goes to module A27, pin D:21 | Leave open |
+| A:21 | PD21A1 | Output D:21 of A27, the Light Control Module. The diagram doesn't label its function. The LCM reads the dash dimmer (S01 pin 13), so dimming is the likeliest guess | Leave open; try it only if a lamp or backlight won't respond over CAN |
 
 ## Connector B
 
@@ -34,13 +34,17 @@ A, B, C below).
 | B:14 + B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Supply + signal |
 | B:6 + B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Supply + signal |
 | B:7 + B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Supply + signal |
-| B:9 | HB9B1 | Ambient air temperature (B22A) | Resistance to sensor ground |
+| B:9 | HB9A1 | Ambient air temperature (B22A) | Resistance to sensor ground |
 | B:12 | HB12A1 | Gearbox oil temperature (B09) | Resistance to sensor ground |
 | B:10 / B:11 / B:15 | HB10A1 / HB11A1 / HB15A1 | Rear axle oil temps: front-rear, rear-rear, center-rear | Optional |
-| B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional |
+| B:23 | F02A2 | Accessory (ACC) +12 V, from the ACC rail through fuse F02 (radio fuse, 10 A / 25 A) | +12 V, switched (key at ACC) |
+| B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional: likely +12 V when active (fused F circuit) |
 
 **Air pressure sensors are 3-wire:** sensor ground plus two cluster pins, one
-a supply and one the signal. The diagram doesn't say which is which. With the
+a supply and one the signal. The diagram doesn't say which is which, but the
+pattern is the same on all five: sensor pin A is sensor ground, sensor pin C
+goes to B:2 / B:6 / B:7 / B:13 / B:14, and sensor pin B goes to B:17 / B:18 /
+B:19 / B:20 / B:21. So measuring one sensor's pair tells you all five. With the
 cluster powered, the pin reading about 5 V is the supply; the other is the
 signal, so a stand-in is a voltage on the signal pin between 0 V and that
 supply.
@@ -48,17 +52,19 @@ supply.
 ## Connector C
 
 Connector C is optional for the gauges and adds no grounds: **A:2 is the
-cluster's only ground**. The indicator inputs switch to sensor ground (A:12 /
-B:1).
+cluster's only ground**. The inputs are not all the same polarity: C:5 (B39)
+switches to sensor ground, C:3 and C:11 to chassis ground, while C:8 and C:10 are
+fused F circuits, so they most likely see +12 V when active. Check each one
+with a meter before wiring a switch to it.
 
 | Pin | Wire | Function | Bench hookup |
 |---|---|---|---|
-| C:3 | HC3A1 | Seat belt switch (S61A) | Optional: switch to sensor ground |
+| C:3 | HC3A1 | Seat belt switch (S61A, normally open, closes to ground when the belt is latched) | Optional: tie to ground for "belted"; open shows the seat belt warning |
 | C:5 | HC5A1 | Air filter restriction switch (B39) | Optional: switch to sensor ground |
 | C:7 | HC7A1 | To engine harness (Volvo X11.A:9 / Cummins FCEN:D) | Leave open |
-| C:8 | F63E1 | Fifth wheel / lift axle circuit (switch S93) | Optional: switch to sensor ground |
-| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: switch to sensor ground |
-| C:11 | HC11A1 | Diff lock engaged indicator (S45x / S047 / S048) | Optional: switch to sensor ground |
+| C:8 | F63E1 | Fifth wheel / lift axle circuit (switch S93) | Optional: likely +12 V when active (fused F circuit), check |
+| C:10 | F27E1 | Interaxle diff lock switch (S09) | Optional: likely +12 V when active (fused F circuit), check |
+| C:11 | HC11A1 | Diff lock engaged indicator (S45x / S047 / S048) | Optional: switch to ground (diff switches go to chassis ground) |
 | C:22 / C:25 | HC22A1 / HC25A1 | Steering wheel buttons via contact reel Z06 (HI/MI, radio, YES/NO) | Optional menu buttons |
 | C:30 | HC30A1 | Steering wheel button return | With C:22 / C:25 |
 | C:29 | HC29A1 | To sheet GP (MCFC:119), wiper circuit | Leave open |
@@ -68,16 +74,22 @@ B:1).
 | Pins | For |
 |---|---|
 | A:1, A:2, A:3 | Battery +12 V, ground, key-switch +12 V |
+| B:23 | ACC +12 V (switched) |
 | A:15, A:16 | J1939 CAN1 H / L |
 | A:17, A:18 | J1708/J1587 A / B |
 | B:3, plus the B air pressure pairs, with A:12 / B:1 sensor ground | Analog gauges (fuel and air), when you get to phase 4 |
 
-## No ignition pin
+## Key position: ACC on B:23, no IGN pin
 
-No cluster pin connects to the ignition (IGN) rail. The cluster most likely
-learns key position over the data links from the VECU, so it may stay dark
-with power applied until it sees bus traffic. If it doesn't wake on bench
-power alone, start sending J1939 and J1587 traffic before deciding it's dead.
+B:23 is fed from the accessory (ACC) rail through fuse F02, which it shares
+with the radio. It is the only hardwired key-position input. No pin
+connects to the ignition (IGN) rail, so the cluster most likely learns
+RUN/START over the data links from the VECU.
+
+On the bench, put +12 V on B:23 through a switch so you can simulate key
+off and key at ACC. If the cluster still doesn't wake with A:1, A:3 and
+B:23 powered, start sending J1939 and J1587 traffic before deciding it's
+dead.
 
 ## Termination
 
@@ -88,4 +100,4 @@ means add 120 Ω at both ends. J1708 uses **no** terminator.
 ## First power-up
 
 Bench supply at 12–13.5 V with the current limit around 1 A. Ground on A:2,
-+12 V on A:1, then +12 V on A:3.
++12 V on A:1, then +12 V on A:3, then +12 V on B:23 (ACC).

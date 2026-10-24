@@ -44,11 +44,12 @@ the 2011–2013 VNL wiring diagram (bridgeplan 21849527, sheets BA and BB).
 - **The cluster wants its VECU.** Volvo service bulletins for 2013–2015 and
   2018–2019 trucks describe "J1587 Communication Error with Vehicle ECU" when
   the cluster (MID 140) loses its J1587 partner. The bridge has to fake it.
-- **No ignition input.** No cluster pin connects to the ignition rail. A:3 is
-  fed from F15, the battery supply to the key switch, which stays live with
-  the key off. The cluster probably learns key position over the data links,
-  so it may stay dark until it sees traffic. A:3 goes on its own switch on
-  the bench to test this.
+- **ACC input, no ignition input.** B:23 is fed from the accessory (ACC)
+  rail through fuse F02, but no cluster pin connects to the ignition rail.
+  A:3 is fed from F15, the battery supply to the key switch, which stays
+  live with the key off. The cluster probably learns RUN/START over the data
+  links, so it may stay dark until it sees traffic. B:23 goes on its own
+  switch on the bench to test this.
 - **Some gauges are wired straight to sensors.** Fuel level and the five air
   pressures are analog inputs on connector B, not network messages. They need
   stand-in signals: the decade box first to find ranges, then digital pots or
