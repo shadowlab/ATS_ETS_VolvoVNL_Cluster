@@ -72,6 +72,7 @@ def prime_libusb():
 
 def open_gs_usb(index, bitrate, sample_point=SAMPLE_POINT, fclk=None):
     from can.interfaces.gs_usb import GsUsbBus
+    import usb.util
     from gs_usb.gs_usb import GsUsb
 
     prime_libusb()
@@ -79,19 +80,34 @@ def open_gs_usb(index, bitrate, sample_point=SAMPLE_POINT, fclk=None):
     if len(devices) <= index:
         raise SystemExit(f"No candleLight device {index} (found {len(devices)}). "
                          "Check the WinUSB driver in Zadig and that libusb-package is installed.")
-    capability = devices[index].device_capability
+    device = devices[index]
+    try:
+        capability = device.device_capability
+    finally:
+        # WinUSB allows one open handle per device, and GsUsbBus opens its own.
+        usb.util.dispose_resources(device.gs_usb)
+        del device, devices
     timing = pick_timing(fclk or capability.fclk_can, bitrate, sample_point, capability)
     print(f"gs_usb timing: {timing}")
 
+    kwargs = {"channel": index, "bitrate": bitrate}
     if "timing" in inspect.signature(GsUsbBus.__init__).parameters:
-        return GsUsbBus(channel=index, bitrate=bitrate, timing=timing)
-    # python-can 4.6 builds its own 87.5% timing inside __init__; hand it ours.
+        kwargs["timing"] = timing
+    # Built in two steps so a failed open can be marked shut down; otherwise
+    # python-can's __del__ retries shutdown on a half-made bus, which crashes.
+    bus = GsUsbBus.__new__(GsUsbBus)
     original = can.BitTiming.__dict__["from_sample_point"]
-    can.BitTiming.from_sample_point = classmethod(lambda cls, *a, **k: timing)
+    if "timing" not in kwargs:
+        # python-can 4.6 builds its own 87.5% timing inside __init__; hand it ours.
+        can.BitTiming.from_sample_point = classmethod(lambda cls, *a, **k: timing)
     try:
-        return GsUsbBus(channel=index, bitrate=bitrate)
+        bus.__init__(**kwargs)
+    except BaseException:
+        bus._is_shutdown = True
+        raise
     finally:
         can.BitTiming.from_sample_point = original
+    return bus
 
 
 def open_bus(args):
