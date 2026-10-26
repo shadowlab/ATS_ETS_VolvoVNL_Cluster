@@ -7,7 +7,8 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 |---|---|
 | `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded |
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
-| `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
+| `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter or the ESP32-S3 bridge on the XY-485 |
+| `flash_ci.ps1` | Flashes the ESP32-S3 J1708 bridge from a CI build and logs J1708 for a few seconds ([firmware/](../firmware/README.md)) |
 | `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
 | `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_sweep_watch` |
