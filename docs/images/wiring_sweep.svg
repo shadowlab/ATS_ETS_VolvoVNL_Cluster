@@ -123,11 +123,11 @@
   <text x="950" y="638" class="small" text-anchor="middle">B</text>
   <text x="1000" y="638" class="small" text-anchor="middle">A</text>
   <text x="872" y="666" class="title">XY-485</text>
-  <text x="872" y="686" class="small">3.3 V RS-485 chip, auto dir</text>
+  <text x="872" y="686" class="small">MAX485 + CD4069 auto dir</text>
   <text x="872" y="706" class="warn">R9 120 Ω REMOVED</text>
   <text x="872" y="724" class="small">R1/R2 4.7k bias: keep</text>
   <text x="872" y="742" class="small">VCC 5 V, onboard reg</text>
-  <text x="872" y="760" class="small">TXD/RXD at 3.3 V</text>
+  <text x="872" y="760" class="warn">Meter MAX485 pin 8 first</text>
   <text x="1072" y="664" class="small" text-anchor="end">VCC</text>
   <text x="1072" y="704" class="small" text-anchor="end">TXD</text>
   <text x="1072" y="744" class="small" text-anchor="end">RXD</text>
