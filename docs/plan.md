@@ -5,7 +5,8 @@ ETS2. Done means every item on the support checklist from step 2 works in game.
 
 ## 1. Bench bring-up and listen
 
-Wire the [minimum bench harness](pinout.md#minimum-bench-harness), power the
+Wire the [minimum bench harness](pinout.md#minimum-bench-harness) as in the
+[bench wiring diagram](wiring.md), power the
 cluster, and log what it sends on CAN1 and J1708: its address claim, the PGNs
 it requests, and what it asks the VECU for. Tools: `can_listen.py`,
 `can_send.py` and `j1708_listen.py` in [tools/](../tools/).
