@@ -36,4 +36,8 @@ and listens for 10 seconds:
 .\flash_ci.ps1 -Port COM7 -Pr 7    # a PR's build
 ```
 
+The script uses esptool from Python if it's installed. Otherwise it downloads
+esptool's standalone Windows build once into `%LOCALAPPDATA%\vnl-bridge`,
+because `pip install esptool` needs a C compiler on very new Pythons.
+
 By hand: `python -m esptool --chip esp32s3 --port COM7 write_flash 0x0 vnl-bridge.bin`.
