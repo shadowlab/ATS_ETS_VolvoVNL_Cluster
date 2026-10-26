@@ -126,6 +126,10 @@ Notes:
 | CH5–7 | spare | |
 | GND | common ground | |
 
+CHn is sigrok's Dn, as PulseView and `tools/la_capture.py` name them. Setup
+and a self-test that needs only the ESP32 are in the
+[tools README](../tools/README.md#logic-analyzer-lonely-binary-8-channel).
+
 Probe the 3.3 V logic side only, never the 12 V lines, CAN H/L or J1708 A/B.
 In PulseView, decode CH1 as CAN at 250 kbit/s and CH3 as UART at 9600 8N1.
 In stage 1 there is no logic-level CAN signal to probe, so CAN traffic is
