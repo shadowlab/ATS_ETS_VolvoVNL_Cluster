@@ -5,12 +5,53 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 
 | Script | What it does |
 |---|---|
-| `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded |
+| `can_selftest.py` | Checks the CANable without the cluster: opens it, loops frames back through it, and tests sending on the bus |
+| `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded; `--live` for a table that updates in place; error frames counted and explained |
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
 | `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
-| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_sweep_watch` |
+| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_sweep_watch` |
+
+## Before the cluster arrives
+
+Check the CANable and the PC side with nothing wired to it. Leave the
+CANable's 120 Ω jumper as it is.
+
+```
+python can_selftest.py --interface gs_usb --channel 0
+```
+
+A healthy CANable 2.0 with candleLight prints:
+
+```
+gs_usb timing: BR: 250_000 bit/s, SP: 85.00%, BRP: 34, TSEG1: 16, TSEG2: 3, SJW: 3, ...
+[PASS] Open: gs_usb 0 at 250000 bit/s
+[PASS] Loopback: 50 frames out and back intact (... ms)
+[INFO] Bus: silent for 2 s (expected with the cluster unplugged or off)
+[PASS] Bus: the test frame went out and nobody ACKed it, as expected with nothing connected. ...
+```
+
+- **Open fails:** the driver or libusb, see
+  [CANable 2.0 on Windows](#canable-20-on-windows-candlelight).
+- **Loopback fails:** USB or firmware. Try another cable and USB port, then
+  reflash candleLight.
+- **Bus gives a WARN instead of "nobody ACKed":** the firmware doesn't report
+  error frames. Not a problem for listening, but the ACK check in the next
+  step won't tell you anything.
+
+Then try the live view, which should open, show a header with zero frames,
+and close cleanly with Ctrl+C:
+
+```
+python can_listen.py --interface gs_usb --channel 0 --live
+```
+
+When the cluster is powered on CAN1, run the self-test again. The bus step
+should now say it heard frames with no error frames, and show the cluster's
+address claim. "Traffic but error frames" points at termination (about 60 Ω
+across A:15/A:16 with power off, see [wiring](../docs/wiring.md)), swapped
+H/L, or the bitrate.
 
 ## First power-up session
 
@@ -26,7 +67,10 @@ python j1708_listen.py --port COM6 --log first_power_j1708.csv
 With candleLight firmware on the CANable, use `--interface gs_usb --channel 0`
 instead (see [CANable 2.0 on Windows](#canable-20-on-windows-candlelight)).
 After a minute, Ctrl+C prints a summary. Run `can_listen.py` again with
-`--poke` to ask every node to claim its address.
+`--poke` to ask every node to claim its address, or with `--live` to watch
+each PGN's bytes change in place (bytes that just changed are highlighted,
+sources gone quiet are dimmed). Error frames are printed and counted either
+way. To open a log in SavvyCAN, name it `.asc` instead of `.csv`.
 
 If the cluster stays dark with B:23 (ACC) powered (it has no ignition pin,
 so it may wait for bus traffic), give it something to hear:
