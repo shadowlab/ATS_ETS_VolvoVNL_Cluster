@@ -79,10 +79,9 @@ PulseView is the viewer and `la_capture.py` drives `sigrok-cli` for logs.
 python la_capture.py scan
 ```
 
-It should list an `fx2lafw` device with channels D0–D7. sigrok's D0 is the
-board's first channel (CH0 or CH1, depending on the silkscreen), and the
-channel numbers in [docs/wiring.md](../docs/wiring.md#logic-analyzer-8-channels)
-are sigrok's.
+It should list an `fx2lafw` device with channels D0–D7. The board's CH0–CH7
+are sigrok's D0–D7, the same numbers as in
+[docs/wiring.md](../docs/wiring.md#logic-analyzer-8-channels).
 
 ### Self-test without the cluster
 

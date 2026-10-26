@@ -126,7 +126,8 @@ Notes:
 | CH5–7 | spare | |
 | GND | common ground | |
 
-CHn is sigrok's Dn, as PulseView and `tools/la_capture.py` name them. Setup
+The analyzer's CHn silkscreen is sigrok's Dn, as PulseView and
+`tools/la_capture.py` name them. Setup
 and a self-test that needs only the ESP32 are in the
 [tools README](../tools/README.md#logic-analyzer-lonely-binary-8-channel).
 
