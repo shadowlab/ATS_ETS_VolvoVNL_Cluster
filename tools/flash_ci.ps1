@@ -15,24 +15,24 @@ param(
     [long] $Run,
     [int] $Seconds = 10
 )
-$ErrorActionPreference = "Stop"
+# Not "Stop": Windows PowerShell treats redirected stderr from esptool as an error.
 $repo = "shadowlab/ATS_ETS_VolvoVNL_Cluster"
 $dir = Join-Path $env:TEMP "vnl-bridge"
 Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
-New-Item -ItemType Directory $dir | Out-Null
+New-Item -ItemType Directory $dir -ErrorAction Stop | Out-Null
 
 if ($Pr) {
     $branch = gh pr view $Pr -R $repo --json headRefName -q .headRefName
     $Run = gh run list -R $repo -w firmware.yml -b $branch -s success -L 1 --json databaseId -q ".[0].databaseId"
-    if (-not $Run) { Write-Error "No green firmware build for PR $Pr" }
+    if (-not $Run) { throw "No green firmware build for PR $Pr" }
 }
 if ($Run) {
     gh run download $Run -R $repo -n vnl-bridge -D $dir
-    if ($LASTEXITCODE) { Write-Error "Download of run $Run failed" }
+    if ($LASTEXITCODE) { throw "Download of run $Run failed" }
 } else {
     $base = "https://github.com/$repo/releases/latest/download"
-    Invoke-WebRequest "$base/vnl-bridge.bin" -OutFile "$dir\vnl-bridge.bin"
-    Invoke-WebRequest "$base/build-info.txt" -OutFile "$dir\build-info.txt"
+    Invoke-WebRequest "$base/vnl-bridge.bin" -OutFile "$dir\vnl-bridge.bin" -ErrorAction Stop
+    Invoke-WebRequest "$base/build-info.txt" -OutFile "$dir\build-info.txt" -ErrorAction Stop
 }
 
 $log = Join-Path $PSScriptRoot "flash_$(Get-Date -Format yyyyMMdd_HHmmss).log"
