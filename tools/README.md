@@ -121,6 +121,26 @@ decoder on D3 at 9600 8N1 for J1708, and in stage 2 a CAN decoder on D1 at
 250 kbit/s. The default 2 MHz sample rate gives 8 samples per CAN bit; raise
 it with `--samplerate 4m` if CAN decoding looks unreliable.
 
+### J1708 frames in PulseView
+
+PulseView's UART decoder shows J1708 as loose bytes. The third-party
+[sr-j1708](https://github.com/TruckHacking/sr-j1708) decoder (MIT) stacks on
+it and splits them into J1708 messages. To install it on
+Windows:
+
+1. Download the repo as a zip (Code > Download ZIP).
+2. Make a folder `j1708` in
+   `C:\Program Files\sigrok\PulseView\share\libsigrokdecode\decoders`
+   and put the zip's `__init__.py` and `pd.py` in it (Windows asks for admin
+   rights).
+3. Restart PulseView.
+
+To use it, add a UART decoder with RX on D3, 9600 baud, 8N1, LSB first.
+Then open that decoder's menu, choose Stack Decoder and pick J1708. It only
+reads the UART's RX line, so for the frames the ESP32 sends add a second
+UART with RX on D2 and stack another J1708 on that. `la_capture.py` doesn't
+need it, since it does its own J1708 decoding.
+
 ## First power-up session
 
 With the CANable 2.0 on CAN1 (A:15/A:16) and a USB-serial adapter on the
