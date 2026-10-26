@@ -191,10 +191,11 @@ def cmd_selftest(args):
 
     sigrok = find_sigrok(args.sigrok)
     scan = run(sigrok, "--scan", timeout=30)
-    if args.driver not in scan:
+    if not any(line.strip().startswith(args.driver) for line in scan.splitlines()):
         print(scan.strip() or "No devices found.")
         raise SystemExit(f"[FAIL] No {args.driver} analyzer found. Check Zadig (WinUSB) and the USB cable.")
-    print(f"[PASS] Analyzer found: {scan.strip().splitlines()[-1].strip()}")
+    found = next(line.strip() for line in scan.splitlines() if line.strip().startswith(args.driver))
+    print(f"[PASS] Analyzer found: {found}")
 
     out = args.out or os.path.join(tempfile.gettempdir(), "la_selftest.sr")
     port = serial.Serial(args.bridge, 115200, timeout=0)

@@ -117,7 +117,8 @@ class DecodeTest(unittest.TestCase):
 
             def run(sigrok, *args, **kwargs):
                 if args[0] == "--scan":
-                    return "The following devices were found:\nfx2lafw - Saleae Logic with 8 channels: D0 D1 D2"
+                    return ("The following devices were found:\ndemo - Demo device with 13 channels: D0\n"
+                            "fx2lafw - Saleae Logic with 8 channels: D0 D1 D2")
                 return real_run(sigrok, *args, **kwargs)
 
             args = SimpleNamespace(sigrok=None, driver="fx2lafw", samplerate="1m", seconds=3.0, bridge="COM7", out=sr)
@@ -130,6 +131,7 @@ class DecodeTest(unittest.TestCase):
                 code = la_capture.cmd_selftest(args)
         self.assertEqual(code, 0, out.getvalue())
         self.assertEqual([c.args[0] for c in port.write.call_args_list], la_capture.TEST_FRAMES)
+        self.assertIn("Analyzer found: fx2lafw - Saleae Logic", out.getvalue())
         self.assertIn("all 10 frames decoded intact", out.getvalue())
         self.assertIn("every frame inside one", out.getvalue())
 
