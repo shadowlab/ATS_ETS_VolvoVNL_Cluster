@@ -66,10 +66,18 @@ class SelfTest(unittest.TestCase):
         self.assertIn("50 frames out and back intact", out)
         self.assertIn("nobody ACKed", out)
 
-    def test_loopback_broken(self):
+    def test_canable2_firmware(self):
+        # candleLight for the CANable 2.0: echoes but no loopback, no error frames.
         code, out = run(FakeBus(loopback_ok=False))
-        self.assertEqual(code, 1)
-        self.assertIn("none looped back", out)
+        self.assertEqual(code, 0, out)
+        self.assertIn("[WARN] Loopback: the firmware took the frames", out)
+        self.assertIn("doesn't report bus errors", out)
+
+    def test_cluster_silent_to_request(self):
+        traffic = [can.Message(arbitration_id=0x18FEF117, data=[0] * 8) for _ in range(3)]
+        code, out = run(FakeBus(traffic=traffic))
+        self.assertEqual(code, 0, out)
+        self.assertIn("sending isn't proven yet", out)
 
     def test_cluster_on_bus(self):
         traffic = [can.Message(arbitration_id=0x18FEF117, data=[0] * 8) for _ in range(5)]
@@ -77,7 +85,7 @@ class SelfTest(unittest.TestCase):
         code, out = run(FakeBus(traffic=traffic, replies=[claim]))
         self.assertEqual(code, 0, out)
         self.assertIn("heard 5 frames", out)
-        self.assertIn("look right", out)
+        self.assertIn("work both ways", out)
         self.assertIn("claim: SA 17", out)
 
     def test_cluster_with_errors(self):

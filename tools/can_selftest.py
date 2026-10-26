@@ -6,12 +6,15 @@
 1. Open: finds the adapter and sets 250k (driver, libusb, firmware, timing).
 2. Loopback (candleLight only): the CANable sends frames to itself with
    nothing wired, and each must come back intact. Proves USB both ways and
-   the CAN controller.
+   the CAN controller. The CANable 2.0's candleLight build lists loopback
+   but doesn't do it; there only the echoes come back, which still proves
+   USB and the firmware.
 3. Bus: listens for two seconds, then sends one Request for Address Claimed
    from F9. With nothing connected nobody can ACK it, and the CANable should
-   report "no ACK"; that's a pass, it shows the transmitter is driving. With
-   the cluster powered on CAN1, traffic and no errors prove the wiring,
-   termination and bitrate.
+   report "no ACK"; that's a pass, it shows the transmitter is driving (the
+   CANable 2.0's candleLight build reports no bus errors, so it can't tell).
+   With the cluster powered on CAN1, traffic and an answer to the request
+   prove the wiring, termination and bitrate.
 
 Exit code 0 when nothing failed.
 """
@@ -72,7 +75,11 @@ def check_loopback(bus, report):
     if have == want:
         report.line("PASS", f"Loopback: {len(sent)} frames out and back intact ({(time.time() - start) * 1000:.0f} ms)")
     elif not looped and any(not m.is_rx for m in got):
-        report.line("FAIL", "Loopback: the CANable took the frames (echoes came back) but none looped back")
+        # candleLight for the CANable 2.0 (STM32G4) lists loopback but its
+        # driver always starts the controller in normal mode.
+        report.line("WARN", "Loopback: the firmware took the frames (echoes came back) but didn't "
+                    "loop them back. The CANable 2.0's candleLight build doesn't do loopback, so USB and "
+                    "firmware are fine; the CAN side needs the cluster to test")
     else:
         missing = len([w for w in want if w not in have])
         report.line("FAIL", f"Loopback: sent {len(sent)}, got {len(looped)} back, {missing} missing or changed")
@@ -103,19 +110,23 @@ def check_bus(bus, args, report):
     answers = [m for m in after if m.is_rx and not m.is_error_frame and j1939.parse_id(m.arbitration_id)[1] == 0xEE00]
     no_ack = any("no ACK" in canbus.error_classes(m) or "TX passive" in canbus.describe_error(m) for m in errors)
 
-    if frames and not errors:
-        report.line("PASS", "Bus: traffic with no error frames, so wiring, termination and bitrate look right")
-    elif frames:
+    if frames and errors:
         report.line("FAIL", f"Bus: traffic but {len(errors)} error frame(s); check termination (about 60 ohm "
                     "across H/L, power off), H/L swapped, or bitrate")
+    elif frames and answers:
+        report.line("PASS", "Bus: the cluster answered our request, so wiring, termination and bitrate "
+                    "work both ways")
+    elif frames:
+        report.line("PASS", "Bus: receiving works. Nothing answered the Address Claimed request, so sending "
+                    "isn't proven yet; try can_listen.py --poke")
     elif no_ack:
         report.line("PASS", "Bus: the test frame went out and nobody ACKed it, as expected with nothing "
                     "connected. With the cluster on, this means it isn't on the bus yet")
     elif errors:
         report.line("WARN", "Bus: error frames with a silent bus; check the wiring when the cluster is on")
     elif args.interface == "gs_usb":
-        report.line("WARN", "Bus: sent the test frame but the firmware reported nothing back, so the "
-                    "ACK can't be checked from here")
+        report.line("INFO", "Bus: sent the test frame, but the firmware doesn't report bus errors (the "
+                    "CANable 2.0's candleLight build doesn't), so the ACK can't be checked without the cluster")
     else:
         report.line("INFO", f"Bus: sent the test frame; {args.interface} doesn't report errors, so the ACK can't be checked")
     for m in errors[:5]:

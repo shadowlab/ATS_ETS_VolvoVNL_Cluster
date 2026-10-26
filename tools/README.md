@@ -22,23 +22,28 @@ CANable's 120 Ω jumper as it is.
 python can_selftest.py --interface gs_usb --channel 0
 ```
 
-A healthy CANable 2.0 with candleLight prints:
+With candleLight on the CANable 2.0 it prints:
 
 ```
 gs_usb timing: BR: 250_000 bit/s, SP: 85.00%, BRP: 34, TSEG1: 16, TSEG2: 3, SJW: 3, ...
 [PASS] Open: gs_usb 0 at 250000 bit/s
-[PASS] Loopback: 50 frames out and back intact (... ms)
+[WARN] Loopback: the firmware took the frames (echoes came back) but didn't loop them back. ...
 [INFO] Bus: silent for 2 s (expected with the cluster unplugged or off)
-[PASS] Bus: the test frame went out and nobody ACKed it, as expected with nothing connected. ...
+[INFO] Bus: sent the test frame, but the firmware doesn't report bus errors ...
 ```
+
+That's as far as this adapter can go without a second CAN node. The
+CANable 2.0's candleLight build (STM32G4) lists loopback and listen-only
+but always runs the controller in normal mode, and has no bus error
+reporting, so the WARN and INFO are expected. What the run does prove is
+the driver, libusb, the bit timing, and frames going to the CANable and
+coming back over USB. Other candleLight adapters (STM32F0/F4/G0) loop back
+and report errors, and pass both steps.
 
 - **Open fails:** the driver or libusb, see
   [CANable 2.0 on Windows](#canable-20-on-windows-candlelight).
-- **Loopback fails:** USB or firmware. Try another cable and USB port, then
-  reflash candleLight.
-- **Bus gives a WARN instead of "nobody ACKed":** the firmware doesn't report
-  error frames. Not a problem for listening, but the ACK check in the next
-  step won't tell you anything.
+- **Loopback FAIL, or no echoes:** USB or firmware. Try another cable and
+  USB port, then reflash candleLight.
 
 Then try the live view, which should open, show a header with zero frames,
 and close cleanly with Ctrl+C:
@@ -48,10 +53,12 @@ python can_listen.py --interface gs_usb --channel 0 --live
 ```
 
 When the cluster is powered on CAN1, run the self-test again. The bus step
-should now say it heard frames with no error frames, and show the cluster's
-address claim. "Traffic but error frames" points at termination (about 60 Ω
-across A:15/A:16 with power off, see [wiring](../docs/wiring.md)), swapped
-H/L, or the bitrate.
+should now say it heard frames and that the cluster answered the request,
+which proves wiring, termination and bitrate both ways. Since this
+firmware can't report errors, a wiring fault shows as silence instead:
+check termination (about 60 Ω across A:15/A:16 with power off, see
+[wiring](../docs/wiring.md)), swapped H/L, and the bitrate. On adapters that
+do report errors, "traffic but error frames" points at the same things.
 
 ## First power-up session
 
@@ -70,7 +77,7 @@ After a minute, Ctrl+C prints a summary. Run `can_listen.py` again with
 `--poke` to ask every node to claim its address, or with `--live` to watch
 each PGN's bytes change in place (bytes that just changed are highlighted,
 sources gone quiet are dimmed). Error frames are printed and counted either
-way. To open a log in SavvyCAN, name it `.asc` instead of `.csv`.
+way, on adapters that report them (the CANable 2.0's candleLight doesn't). To open a log in SavvyCAN, name it `.asc` instead of `.csv`.
 
 If the cluster stays dark with B:23 (ACC) powered (it has no ignition pin,
 so it may wait for bus traffic), give it something to hear:
