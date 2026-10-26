@@ -2,6 +2,7 @@
 
 import unittest
 
+import can_listen
 import j1587
 import j1939
 
@@ -48,6 +49,27 @@ class J1587Test(unittest.TestCase):
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
+
+
+class LiveViewTest(unittest.TestCase):
+    def test_changed_bytes_highlighted_then_fade(self):
+        entry = can_listen.new_entry()
+        can_listen.update(entry, bytes([1, 2, 3]), 10.0)
+        can_listen.update(entry, bytes([1, 9, 3]), 10.1)
+        seen = {(0x00, 0xF004): entry}
+        row = can_listen.render(seen, 10.2, 0.0, 0, "", set())[3]
+        self.assertIn("01 \x1b[7m09\x1b[27m 03", row)
+        self.assertIn("100.0ms", row)
+        later = can_listen.render(seen, 11.5, 0.0, 0, "", set())[3]
+        self.assertNotIn("\x1b[7m", later)
+
+    def test_stale_rows_dimmed_and_requests_listed(self):
+        entry = can_listen.new_entry()
+        can_listen.update(entry, bytes([0xC1, 0xFE, 0x00]), 1.0)
+        lines = can_listen.render({(0x17, 0xEA00): entry}, 5.0, 0.0, 3, "no ACK", {(0x17, 0xFEC1)})
+        self.assertIn("error frames 3  (last: no ACK)", lines[0])
+        self.assertTrue(lines[3].startswith("\x1b[2m"))
+        self.assertIn("SA 17 -> 0FEC1 VDHR", lines[-1])
 
 
 if __name__ == "__main__":
