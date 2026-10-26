@@ -157,7 +157,7 @@
   <text x="950" y="638" class="small" text-anchor="middle">B</text>
   <text x="1000" y="638" class="small" text-anchor="middle">A</text>
   <text x="872" y="666" class="title">XY-485</text>
-  <text x="872" y="686" class="small">MAX485, auto direction</text>
+  <text x="872" y="686" class="small">3.3 V RS-485 chip, auto dir</text>
   <text x="872" y="706" class="warn">R9 120 Ω REMOVED</text>
   <text x="872" y="724" class="small">R1/R2 4.7k bias: keep</text>
   <text x="872" y="742" class="small">VCC 5 V, onboard reg</text>

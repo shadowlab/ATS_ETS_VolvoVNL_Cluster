@@ -93,8 +93,18 @@ In stage 1 only the XY-485 rows (5V, GPIO17, GPIO18, GND) are wired; the
 SN65HVD230 rows are stage 2.
 
 Everything on the ESP32 side is 3.3 V logic. The SN65HVD230 runs from 3.3 V.
-The XY-485 is fed 5 V and its onboard regulator brings the MAX485 down to
-3.3 V, so its TXD and RXD are 3.3 V too. Never put 5 V on an ESP32-S3 GPIO.
+The XY-485 accepts 3–30 V on VCC and its onboard regulator runs the
+transceiver (a 3.3 V SP3485/MAX3485-class part on most listings) and the
+auto-direction logic at 3.3 V, so its TXD and RXD are 3.3 V too. Feed it from
+the 5V (VBUS) pin rather than 3V3: the regulator then has headroom, and the
+3V3 rail stays for the ESP32-S3 and the SN65HVD230. The 3V3 pin would also
+work, since 3.0 V is the module's minimum, but it leaves the regulator in
+dropout. Never put 5 V on an ESP32-S3 GPIO.
+
+Before connecting GPIO17/18 the first time, power the XY-485 from 5V and GND
+alone and measure its RXD and TXD pins to GND with a meter: both should idle
+at about 3.3 V. If either reads near 5 V, that board's pull-ups go to VCC;
+power it from 3V3 instead, or add a divider on RXD.
 
 The pins are a suggestion: the TWAI controller and UART1 can use almost any
 GPIO. These avoid the strapping pins (0, 3, 45, 46), native USB (19, 20) and

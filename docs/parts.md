@@ -34,7 +34,9 @@
 J1708 is RS-485-style but not plain RS-485: no 120 Ω terminator, bias
 resistors hold the idle state, and a sender drives only the active level.
 The XY-485's 74HC04 auto-direction stage does exactly that from TX at 9600
-baud. Its MAX485 runs below its rated 5 V on the board's 3.3 V regulator;
-that's common at low speed, but revisit it if reception is flaky. While
+baud. Its transceiver runs from the board's 3.3 V regulator, so it should be
+a 3.3 V part (SP3485/MAX3485 class; check the marking). If it turns out to be
+a 5 V MAX485, it's running below spec, which is common at low speed, but
+revisit it if reception is flaky. While
 sending, you probably won't read back your own bytes, which is fine with only
 the ESP32 and the cluster on the bus.
