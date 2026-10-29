@@ -56,8 +56,30 @@ any PGN, so nothing here says what it wants to hear.
 Sending EEC1 (0xF004, SA 0x00, 1000 rpm) at 100 Hz did not move the tach, so
 that alone isn't enough.
 
+### On J1708 (MID 140)
+
+Same session, through the ESP32 bridge. Frames are MID + data + checksum.
+
+| Rate | Frame | Reading |
+|---|---|---|
+| ~1.1 s | PID 192 twice: `c2 10 15 75 a4 03 ab a5 03 54 a9 03 76 a4 03 b1 a9` and `c2 11 03 60 a5 03 4d a5 03` | The cluster's own fault list, 7 entries with first bytes 0x75, 0xAB, 0x54, 0x76, 0xB1, 0x60, 0x4D (PIDs 117, 171, 84, 118, 177, 96, 77). Most match the unconnected analog inputs (air pressure, ambient and gearbox oil temperature, fuel level). It never changed while we sent engine data. |
+| 10 s | PID 245 `2b 0d 55 00` | Odometer, 0x00550D2B, about 557,000 mi |
+| 10 s | PID 251 and 252 | Clock and date |
+| 10 s | PID 128 request: MID 128, PID 250 | Asks the engine for total fuel used |
+| key-on | PID 128 request: MID 128, PID 98 | Asks the engine for oil level, seven times, then stops |
+| 10 s | PID 254 to MID 128: `d4 80 69 80`, `d4 80 6b 80`, `d4 80 6c 80` | Proprietary polls of the engine with a changing third byte |
+| 10 s | PID 254 to MID 127, 15 bytes: `d4 c2 0c c8 b9 04 16 89 03 c9 bc 01 eb bc 01` | Proprietary; carries fault-code triplets |
+| once | PID 254 to MID 142: `d4 d9 05 65 6e 67 47 42` | Ends in ASCII "engGB", maybe the display language |
+
+PID 254 frames are `fe`, destination MID, length, data, in the frames seen so far.
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |
 |---|---|---|---|---|
-| | | | | |
+| 2026-10-29 | J1708 | MID 128 request for PID 245 from MID 140: `80 80 F5 8C`, and `80 00 F5` | request | The cluster answers with PID 245 about every 2.1 s instead of every 10 s, so sending on J1708 works end to end |
+
+### Tried without effect
+
+- CAN: EEC1 (0xF004, SA 0x00), 1000 rpm, 100 Hz. Tach and other needles stayed at rest, also across a key off/on.
+- J1708: MID 128 PID 190 engine speed, PID 84 road speed, PID 98 oil level, PID 250 total fuel, and MID 144 PID 84, together with the CAN frame above. No visible change and no change in the cluster's fault list.
