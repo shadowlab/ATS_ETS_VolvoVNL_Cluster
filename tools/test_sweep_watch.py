@@ -14,6 +14,7 @@ import unittest
 import can
 import numpy as np
 
+import j1587
 import j1939
 import sweep_watch as sw
 
@@ -67,6 +68,12 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(p[0], b"\x01" + b"\x00" * 7)
         self.assertEqual(p[63], b"\x00" * 7 + b"\x80")
         self.assertEqual(len(sw.candidates([0xFF00], [0x21], [b"\x00" * 8], bits=True)), 64)
+
+
+    def test_j1708_candidates(self):
+        got = sw.j1708_candidates([0x80], [0x54, 0x80, 0xC2, 0xFE, 0xFF], [0x00])
+        self.assertEqual(got, [(0x80, 0x54, b"\x00"), (0x80, 0x80, b"\x00\x00"), (0x80, 0xC2, b"\x02\x00\x00")])
+        self.assertEqual(len(sw.j1708_candidates([0x80, 0x90], range(0, 254), [0x00, 0xFF])), 2 * 254 * 2)
 
 
 class RotateTest(unittest.TestCase):
@@ -126,6 +133,66 @@ class SweepTest(unittest.TestCase):
         hits, rows, _, _ = self.run_case(latch=True)
         self.assertEqual(hits, 1)
         self.assertEqual(rows[0]["latched"], "yes")
+
+
+class FakePort:
+    """A serial port that remembers when each frame was last written."""
+
+    def __init__(self):
+        self.last_write = {}
+
+    def write(self, data):
+        self.last_write[bytes(data)] = time.time()
+
+
+class LampCamera(FakeCamera):
+    """Like FakeCamera, but the lamp lights while the target frame is being written to a FakePort."""
+
+    def __init__(self, port, target_frame):
+        self.port = port
+        self.target_frame = target_frame
+        self.n = 0
+
+    def frame(self, timeout=2.0):
+        time.sleep(0.02)
+        self.n += 1
+        img = np.full((120, 160, 3), 20, np.uint8)
+        img[5:15, 5:30] = (self.n * 37) % 255  # clock, masked out
+        if time.time() - self.port.last_write.get(self.target_frame, 0.0) < 0.25:
+            img[60:80, 100:120] = 230
+        return img
+
+    def close(self):
+        pass
+
+
+class J1708SweepTest(unittest.TestCase):
+    def test_finds_only_the_target_frame(self):
+        port = FakePort()
+        target = j1587.make_frame(0x80, bytes([0x54, 0xFF]))
+        camera = LampCamera(port, target)
+        detector = sw.ChangeDetector(ignore=[[0, 0, 40, 20]])
+        cands = sw.j1708_candidates([0x80, 0x90], [0x53, 0x54, 0x55], [0x00, 0xFF])
+        out = tempfile.mkdtemp()
+        hits = sw.run_sweep(None, camera, detector, cands, out, dwell=0.3, settle=0.3, recover=1.0,
+                            log=lambda *_: None, transport=sw.J1708Transport(port))
+        with open(os.path.join(out, "hits.csv"), newline="") as f:
+            rows = list(csv.DictReader(f))
+        self.assertEqual(hits, 1)
+        self.assertEqual((rows[0]["sa"], rows[0]["pgn"], rows[0]["payload"], rows[0]["name"]),
+                         ("80", "00054", "ff", "Road speed"))
+        with open(os.path.join(out, "review.html")) as f:
+            self.assertIn("MID 80<br>PID 00054 Road speed", f.read())
+        self.assertIn(j1587.make_frame(0x90, bytes([0x55, 0x00])), port.last_write)
+
+    def test_periodic_writer_stops(self):
+        port = FakePort()
+        w = sw.PeriodicWriter(port, b"\x01\x02", 0.05)
+        time.sleep(0.12)
+        w.stop()
+        seen = port.last_write[b"\x01\x02"]
+        time.sleep(0.15)
+        self.assertEqual(port.last_write[b"\x01\x02"], seen)
 
 
 if __name__ == "__main__":

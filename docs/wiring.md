@@ -53,14 +53,13 @@ SN65HVD230 at the far end of the bus from the cluster.
 end. First measure A:15 to A:16 on the cluster alone, power off:
 
 - About 120 Ω: the cluster terminates its own end.
-- About 60–70 Ω: the cluster terminates the whole bus by itself, so add no
-  other terminator: CANable jumper off in both stages, and remove the
-  SN65HVD230's 120 Ω in stage 2. Lab's cluster reads about 68 Ω, so this is
-  the case on this bench.
+- About 60–70 Ω: not a plain 120 Ω terminator. Lab's cluster reads about
+  68 Ω, and on this bench the CANable's 120 Ω jumper still had to be fitted
+  (the cluster doesn't terminate the bus by itself). Don't skip it because
+  of this reading.
 - Open: add a loose 120 Ω across A:15/A:16 at the cluster.
 
-If the cluster terminates only its own end, the other end depends on the
-stage:
+The other end depends on the stage:
 
 - **Stage 1:** the CANable is the far end. Fit its 120 Ω jumper.
 - **Stage 2:** the SN65HVD230 is the far end. Most of these boards carry
@@ -68,7 +67,9 @@ stage:
   the CANable's jumper.
 
 With everything wired and the power off, CAN H to CAN L should read about
-60 Ω. About 40 Ω means three terminators: pull the CANable's jumper.
+60 Ω, or somewhat less if the cluster's own reading is low as above. About
+40 Ω with a cluster that reads 120 Ω alone means three terminators: pull the
+CANable's jumper.
 
 ## J1708 / J1587 (9600 baud)
 
