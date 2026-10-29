@@ -33,6 +33,29 @@ against the paid SAE documents.
   module (MID 232)? If so, the bridge has to fake MID 232 as well as the VECU.
 - Do fuel and air pressure also accept network values, or only analog?
 
+## Heard from the cluster
+
+2026-10-29, first power-up: key (A:3) and battery (A:1) on, CANable only on
+CAN1, 250 kbit/s. The cluster claims source address 0x17 (Address Claimed
+NAME: manufacturer 60, function 1, vehicle system 24, industry group 2) and
+sends these on its own, about once a second unless noted. It never asked for
+any PGN, so nothing here says what it wants to hear.
+
+| PGN | Name | Last payload | Reading |
+|---|---|---|---|
+| 0xE000 | unknown | `ff ff ff 3f ff f0 ff ff` | Unidentified |
+| 0xFE58 | unknown | `ff ff ff ff fe fe fe fe` | Mostly not-available |
+| 0xFEAE | AIR1 | `fe ff fe fe ff ff ff ff` | Not available |
+| 0xFEC1 | VDHR | `6c 8a b1 0a ff ff ff ff` | 0x0AB18A6C x 5 m, about 897,000 km: the cluster's own odometer |
+| 0xFEE6 | TD | `d4 21 11 0a 74 29 5f 7c` | 2026-10-29 17:33:53, the cluster's clock |
+| 0xFEF5 | AMB | `ff ff ff fe fe ff ff ff` | Not available |
+| 0xFEFC | DD | `ff fe ff ff ff ff ff ff` | Not available (fuel level, SPN 96, is byte 2) |
+| 0xFF27 | Proprietary B | `ff ff ff ff ff ff ff ff` | Unused so far |
+| 0xFF28 | Proprietary B | `fc f0 fe ff ff ff ff ff` | Every 424 ms, so twice the rate of the rest; the first thing to watch while sweeping |
+
+Sending EEC1 (0xF004, SA 0x00, 1000 rpm) at 100 Hz did not move the tach, so
+that alone isn't enough.
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |
