@@ -9,10 +9,11 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded; `--live` for a table that updates in place; error frames counted and explained |
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
+| `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
 | `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
-| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_la_capture test_sweep_watch` |
+| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch` |
 
 ## Before the cluster arrives
 
@@ -185,6 +186,20 @@ That's EEC1 at 1000 rpm, so the tach should move. Repeat `--send` for more
 frames. On Windows only one program can open a gs_usb CANable at a time, so
 use `--send` rather than `can_send.py` in a second window, which fails with
 "Access denied".
+
+To check the J1708 wiring on its own, with the bridge firmware on the ESP32's
+native USB port and the cluster powered:
+
+```
+python j1708_selftest.py --port COM7
+```
+
+`[PASS] Listen` with `[PASS] Cluster: MID 140` proves A/B polarity, the
+XY-485's power and bias, RXD to GPIO18 and 9600 baud. Garbage bytes (`FAIL`)
+point at A/B swapped or no bias, and silence at power or wiring; the messages
+say what to check. The echo step sends three harmless test frames and looks
+for them coming back. An auto-direction XY-485 often doesn't echo, so no echo
+is only information. Use `--no-cluster` with the cluster off.
 
 Save the logs, and copy what the cluster requested into
 [docs/messages.md](../docs/messages.md).
