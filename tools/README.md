@@ -271,6 +271,22 @@ In the preview, wave a hand or flip a switch to check that changes get a
 red box and the change reading goes over the hit level. Raise
 `--pixel-threshold` or `--min-area` if it triggers on noise.
 
+To tune it before you can switch a lamp yourself, use a lit lamp you can
+cover. A lamp going dark is as big a change as one lighting up:
+
+1. Frame the cluster tightly and mask everything outside its face (desk,
+   screens) in `pick`, so the change reading is about the cluster.
+2. Leave `preview` alone for a minute and note the highest "change" value
+   you see. That's the noise floor.
+3. Cover the smallest lit lamp with a fingertip or a bit of tape and note
+   the reading.
+4. Set `--min-area` between the two, nearer the noise floor. A false hit is
+   one click to ignore in `review.html`, a missed lamp is lost work, so lean
+   sensitive. The default `--pixel-threshold` of 30 is fine for bright lamps.
+
+Lock exposure and white balance in DroidCam first, or a change in
+automatic exposure looks like a change in the whole picture.
+
 Mark the LCD's clock when you `pick` (it changes every minute), plus any
 lamp that blinks on its own. Only one program can open the CANable at a time
 on Windows, so close `can_listen.py` before a sweep.
