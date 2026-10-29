@@ -11,6 +11,7 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter or the ESP32 bridge on the XY-485; `--send` repeats a frame of your own onto the bus |
 | `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
+| `flash_ci.ps1` | Flashes the ESP32-S3 J1708 bridge from a CI build and logs J1708 for a few seconds ([firmware/](../firmware/README.md)) |
 | `sweep_watch.py` | Unattended J1939 or J1587 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
 | `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch` |
