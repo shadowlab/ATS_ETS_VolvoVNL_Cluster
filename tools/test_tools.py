@@ -48,6 +48,18 @@ class J1587Test(unittest.TestCase):
         params = j1587.parse_params(bytes([84, 100, 190, 0x40, 0x1F, 194, 2, 0xAA, 0xBB, 96, 50]))
         self.assertEqual(params, [(84, b"\x64"), (190, b"\x40\x1f"), (194, b"\xaa\xbb"), (96, b"\x32")])
 
+    def test_data_link_escape_frames(self):
+        # Seen from the cluster on the bench; they used to be rejected as unsplittable.
+        short = bytes.fromhex("8c fe 80 04 d4 80 69 80 b5")
+        long = bytes.fromhex("8c fe 7f 0f d4 c2 0c c8 b9 04 16 89 03 c9 bc 01 eb bc 01 f1")
+        clock = bytes.fromhex("8c fb 03 d4 37 11 5a 8c fc 03 74 0a 29 ce")
+        self.assertTrue(j1587.is_valid(short))
+        self.assertTrue(j1587.is_valid(long))
+        self.assertEqual(j1587.split_frames(clock + short), [bytes.fromhex("8c fb 03 d4 37 11 5a"),
+                                                               bytes.fromhex("8c fc 03 74 0a 29 ce"), short])
+        self.assertIn("data link escape to MID 128 [d4 80 69 80]", j1587.describe(short))
+        self.assertIn("to MID 127", j1587.describe(long))
+
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
