@@ -27,9 +27,9 @@ GS_USB_BREQ_MODE = 2  # gs_usb control request and mode, as in gs_usb.gs_usb
 GS_CAN_MODE_START = 1
 
 
-def add_bus_args(ap):
+def add_bus_args(ap, channel_required=True):
     ap.add_argument("--interface", default="slcan", help="python-can interface: slcan, gs_usb (candleLight), socketcan, virtual")
-    ap.add_argument("--channel", required=True, help="COM port for slcan, device number (0) for gs_usb, can0 for socketcan")
+    ap.add_argument("--channel", required=channel_required, help="COM port for slcan, device number (0) for gs_usb, can0 for socketcan")
     ap.add_argument("--bitrate", type=int, default=250000)
     ap.add_argument("--sample-point", type=float, default=SAMPLE_POINT, help="gs_usb only: target sample point in percent")
     ap.add_argument("--fclk", type=int, help="gs_usb only: CAN clock in Hz, if the device can't report it")

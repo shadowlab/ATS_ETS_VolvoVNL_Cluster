@@ -11,7 +11,7 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter or the ESP32 bridge on the XY-485; `--send` repeats a frame of your own onto the bus |
 | `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
-| `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
+| `sweep_watch.py` | Unattended J1939 or J1587 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
 | `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch` |
 
@@ -270,16 +270,42 @@ In the preview, wave a hand or flip a switch to check that changes get a
 red box and the change reading goes over the hit level. Raise
 `--pixel-threshold` or `--min-area` if it triggers on noise.
 
-Sweep the Volvo proprietary range from the usual source addresses (about
-1.5 s per candidate, so this one is roughly 75 minutes):
+Mark the LCD's clock when you `pick` (it changes every minute), plus any
+lamp that blinks on its own. Only one program can open the CANable at a time
+on Windows, so close `can_listen.py` before a sweep.
+
+Both buses are proven both ways (see
+[docs/messages.md](../docs/messages.md)), and engine data alone doesn't move
+the needles. A good order, at about 1.5 s per candidate:
+
+1. **J1708, MID 128 and 144 (about 25 minutes):** every PID from 00 to FD,
+   filled with 00 and FF. The ESP32 bridge must be on `--port`.
 
 ```
-python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF00-FFFF --sources 00,03,0B,21,31,17 --payloads 00,FF
+python sweep_watch.py sweep --transport j1708 --port COM11 --camera 0 --mids 80,90 --pids 00-FD --fills 00,FF
+```
+
+   The data is one byte below PID 128, two bytes up to 191, and a length of
+   2 plus two bytes above that. PIDs 254 and 255 are skipped.
+
+2. **CAN, Volvo proprietary range from a few sources (about 40 minutes):**
+   PGNs FF00 to FFFF from the engine (00) and body (21) addresses, plus 0B.
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF00-FFFF --sources 00,0B,21 --payloads 00,FF
+```
+
+3. **The same range from the rest (about 25 minutes):** sources 03 and 31. Leave out
+   17: that's the cluster's own address, and sending as it can upset the
+   address claim.
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF00-FFFF --sources 03,31 --payloads 00,FF
 ```
 
 If the cluster needs to hear an engine to stay awake, add
-`--background F004:00:FFFFFF401FFFFFFF` (repeatable) to keep sending a
-frame through the whole run.
+`--background F004:00:FFFFFF401FFFFFFF` (repeatable, CAN only) to keep
+sending a frame through the whole run.
 
 Each run gets a folder under `sweeps/`. Open its `review.html` to see every
 hit with before and after pictures, mark it confirmed or ignored, add a
@@ -289,7 +315,7 @@ with `--out <that folder>` to pick up where it left off.
 To find which bit of a hit does what, sweep it one bit at a time:
 
 ```
-python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF23 --sources 21 --payloads 00 --bits
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF23 --sources 21 --payloads 00 --bits
 ```
 
 Copy confirmed results into [docs/messages.md](../docs/messages.md).
