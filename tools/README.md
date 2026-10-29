@@ -148,14 +148,15 @@ XY-485 (A:17/A:18), run both listeners in separate windows, then power the
 cluster as in [docs/pinout.md](../docs/pinout.md#first-power-up):
 
 ```
-python can_listen.py --interface slcan --channel COM5 --log first_power_can.csv --quiet
+python can_listen.py --interface gs_usb --channel 0 --poke --log first_power_can.csv
 python j1708_listen.py --port COM6 --log first_power_j1708.csv
 ```
 
-With candleLight firmware on the CANable, use `--interface gs_usb --channel 0`
-instead (see [CANable 2.0 on Windows](#canable-20-on-windows-candlelight)).
-After a minute, Ctrl+C prints a summary. Run `can_listen.py` again with
-`--poke` to ask every node to claim its address, or with `--live` to watch
+That's for candleLight firmware on the CANable (see
+[CANable 2.0 on Windows](#canable-20-on-windows-candlelight)); with slcan
+firmware use `--interface slcan --channel COM5` instead.
+After a minute, Ctrl+C prints a summary. `--poke` asks every node to claim
+its address; run `can_listen.py` again with `--live` to watch
 each PGN's bytes change in place (bytes that just changed are highlighted,
 sources gone quiet are dimmed). Error frames are printed and counted either
 way, on adapters that report them (the CANable 2.0's candleLight doesn't). To open a log in SavvyCAN, name it `.asc` instead of `.csv`.
@@ -164,7 +165,7 @@ If the cluster stays dark with B:23 (ACC) powered (it has no ignition pin,
 so it may wait for bus traffic), give it something to hear:
 
 ```
-python can_send.py --channel COM5 --pgn F004 --sa 00 --data "FF FF FF 40 1F FF FF FF" --period 0.01
+python can_send.py --interface gs_usb --channel 0 --pgn F004 --sa 00 --data "FF FF FF 40 1F FF FF FF" --period 0.01
 ```
 
 Save the logs, and copy what the cluster requested into
