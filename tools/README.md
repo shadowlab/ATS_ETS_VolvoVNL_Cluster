@@ -5,7 +5,7 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 
 | Script | What it does |
 |---|---|
-| `can_selftest.py` | Checks the CANable without the cluster: opens it, loops frames back through it, and tests sending on the bus |
+| `can_selftest.py` | Checks the CANable, with or without the cluster: opens it, loops frames back through it, tests sending, and checks whether anything on CAN1 ACKs |
 | `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded; `--live` for a table that updates in place; error frames counted and explained |
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
 | `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
@@ -161,12 +161,30 @@ each PGN's bytes change in place (bytes that just changed are highlighted,
 sources gone quiet are dimmed). Error frames are printed and counted either
 way, on adapters that report them (the CANable 2.0's candleLight doesn't). To open a log in SavvyCAN, name it `.asc` instead of `.csv`.
 
-If the cluster stays dark with B:23 (ACC) powered (it has no ignition pin,
-so it may wait for bus traffic), give it something to hear:
+If the bus stays silent, first check the cluster is on it at all, with the
+cluster powered:
 
 ```
-python can_send.py --interface gs_usb --channel 0 --pgn F004 --sa 00 --data "FF FF FF 40 1F FF FF FF" --period 0.01
+python can_selftest.py --interface gs_usb --channel 0
 ```
+
+`[PASS] ACK: all 12 test frames went out` means the cluster is ACKing, so the
+wiring, termination and bitrate are right and it just isn't talking. `[WARN]
+ACK: only 3 of 12` means nobody ACKed. Run it once with CAN H/L unplugged to
+see that "nobody" number on your adapter; the check counts the CANable's
+transmit echoes, since the CANable 2.0 reports no bus errors.
+
+Then give the cluster something to hear (it has no ignition pin, so it may
+wait for an engine ECU), while logging what comes back:
+
+```
+python can_listen.py --interface gs_usb --channel 0 --send "F004:00:FF FF FF 40 1F FF FF FF" --send-period 0.01 --log eec1.csv
+```
+
+That's EEC1 at 1000 rpm, so the tach should move. Repeat `--send` for more
+frames. On Windows only one program can open a gs_usb CANable at a time, so
+use `--send` rather than `can_send.py` in a second window, which fails with
+"Access denied".
 
 Save the logs, and copy what the cluster requested into
 [docs/messages.md](../docs/messages.md).

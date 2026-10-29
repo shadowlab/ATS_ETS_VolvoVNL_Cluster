@@ -1,5 +1,6 @@
 """Offline checks for the helpers. Run with: python -m unittest test_tools"""
 
+import argparse
 import unittest
 
 import can_listen
@@ -70,6 +71,14 @@ class LiveViewTest(unittest.TestCase):
         self.assertIn("error frames 3  (last: no ACK)", lines[0])
         self.assertTrue(lines[3].startswith("\x1b[2m"))
         self.assertIn("SA 17 -> 0FEC1 VDHR", lines[-1])
+
+    def test_parse_send(self):
+        msg = can_listen.parse_send("F004:00:FF FF FF 40 1F")
+        self.assertEqual(msg.arbitration_id, 0x18F00400)
+        self.assertEqual(bytes(msg.data), bytes([0xFF, 0xFF, 0xFF, 0x40, 0x1F, 0xFF, 0xFF, 0xFF]))
+        self.assertTrue(msg.is_extended_id)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            can_listen.parse_send("F004 00 FF")
 
 
 if __name__ == "__main__":

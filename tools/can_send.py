@@ -20,6 +20,12 @@ def parse_hex(text):
     return bytes(int(b, 16) for b in text.replace(",", " ").split())
 
 
+def build_message(pgn, sa, data, da=j1939.GLOBAL, priority=6):
+    """A J1939 frame, with the payload padded to 8 bytes with FF."""
+    data = data + b"\xFF" * (8 - len(data)) if len(data) < 8 else data
+    return can.Message(arbitration_id=j1939.make_id(pgn, sa, da, priority), data=data, is_extended_id=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     canbus.add_bus_args(ap)
@@ -31,11 +37,8 @@ def main():
     ap.add_argument("--period", type=float, default=0.1, help="seconds between frames; 0 sends once")
     args = ap.parse_args()
 
-    data = parse_hex(args.data)
-    data = data + b"\xFF" * (8 - len(data)) if len(data) < 8 else data
-    can_id = j1939.make_id(int(args.pgn, 16), int(args.sa, 16), int(args.da, 16), args.priority)
-    msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=True)
-    print(f"{can_id:08X}  {data.hex(' ')}  {j1939.describe(can_id, data)}")
+    msg = build_message(int(args.pgn, 16), int(args.sa, 16), parse_hex(args.data), int(args.da, 16), args.priority)
+    print(f"{msg.arbitration_id:08X}  {bytes(msg.data).hex(' ')}  {j1939.describe(msg.arbitration_id, bytes(msg.data))}")
 
     bus = canbus.open_bus(args)
     try:
