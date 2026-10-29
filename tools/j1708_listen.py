@@ -26,6 +26,10 @@ import serial
 import j1587
 
 
+# The bridge ends a frame after a 3 ms pause on USB, so writes closer together would merge.
+SEND_SPACING = 0.05
+
+
 def parse_send(text):
     """--send "MID DATA..." (hex bytes, no checksum) into a frame."""
     try:
@@ -69,6 +73,7 @@ def main():
             if args.send and time.time() >= next_send:
                 for frame in args.send:
                     port.write(frame)
+                    time.sleep(SEND_SPACING)
                 next_send = time.time() + args.send_period
             data = port.read(256)
             if data:
