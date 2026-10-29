@@ -15,6 +15,13 @@
    CANable 2.0's candleLight build reports no bus errors, so it can't tell).
    With the cluster powered on CAN1, traffic and an answer to the request
    prove the wiring, termination and bitrate.
+4. ACK (candleLight only): sends a burst of the same request and counts the
+   echoes. candleLight echoes a frame once the controller takes it, and the
+   controller only holds a few frames it can't get ACKed. So every echo back
+   means some node on the bus is ACKing, which a silent cluster still does,
+   and only a few back means nobody is. That works even on the CANable 2.0,
+   which reports no bus errors. Run it once with CAN H/L unplugged to see the
+   "nobody" count on your adapter.
 
 Exit code 0 when nothing failed.
 """
@@ -30,6 +37,7 @@ import j1939
 
 LOOPBACK_FRAMES = 50
 LISTEN_SECONDS = 2.0
+ACK_FRAMES = 12  # well above the controller's TX buffer, well below the firmware's frame pool
 
 
 class Report:
@@ -135,6 +143,29 @@ def check_bus(bus, args, report):
         report.line("INFO", f"  claim: {j1939.describe(m.arbitration_id, bytes(m.data))}")
 
 
+def check_ack(bus, report):
+    """Count echoes of a burst: all back means a node ACKs, a few means none does."""
+    canbus.set_gs_usb_mode(bus)
+    drain(bus, 0.2)
+    poke = can.Message(arbitration_id=j1939.make_id(0xEA00, 0xF9), data=[0x00, 0xEE, 0x00], is_extended_id=True)
+    for _ in range(ACK_FRAMES):
+        bus.send(poke)
+        time.sleep(0.005)
+    got = drain(bus, 1.0)
+    echoes = sum(1 for m in got if not m.is_rx and m.arbitration_id == poke.arbitration_id)
+    # Stop the controller retrying unanswered frames forever.
+    canbus.set_gs_usb_mode(bus)
+    if echoes >= ACK_FRAMES:
+        report.line("PASS", f"ACK: all {ACK_FRAMES} test frames went out, so something on CAN1 is ACKing. "
+                    "With only the cluster on the bus, it's connected, powered and at the right bitrate")
+    elif echoes:
+        report.line("WARN", f"ACK: only {echoes} of {ACK_FRAMES} test frames went out, so nobody ACKed. "
+                    "Expected with nothing connected; with the cluster on, check it's powered (A:1, A:3), "
+                    "H/L not swapped, the 60-70 ohm across H/L, and the bitrate")
+    else:
+        report.line("FAIL", "ACK: no echoes at all; the firmware didn't take the frames")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     canbus.add_bus_args(ap)
@@ -155,6 +186,8 @@ def main():
             report.line("INFO", f"Loopback: not available on {args.interface}, skipped")
         if not args.skip_bus:
             check_bus(bus, args, report)
+            if args.interface == "gs_usb":
+                check_ack(bus, report)
     finally:
         canbus.close_bus(bus)
 

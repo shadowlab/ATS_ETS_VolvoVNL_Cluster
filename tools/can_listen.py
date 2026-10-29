@@ -8,9 +8,15 @@ which PGNs it asks for (Request, 0xEA00) and which address it claims
     python can_listen.py --interface slcan --channel COM5 --poke
     python can_listen.py --interface gs_usb --channel 0 --log first_power.csv
     python can_listen.py --interface gs_usb --channel 0 --live
+    python can_listen.py --interface gs_usb --channel 0 --send "F004:00:FF FF FF 40 1F FF FF FF" --send-period 0.01
 
 --poke sends a global Request for Address Claimed from 0xF9 once at start,
 which every J1939 node should answer.
+
+--send PGN:SA:DATA sends that frame every --send-period seconds while
+listening, like can_send.py. Repeat it for several frames. On Windows only
+one program can open a gs_usb CANable, so this is how to send and log at
+once. The example is EEC1 at 1000 rpm.
 
 --live shows one row per source and PGN, updated in place, with the bytes
 that just changed highlighted. Error frames (no ACK, bus off, wrong bitrate)
@@ -28,6 +34,7 @@ from collections import Counter, defaultdict
 
 import can
 
+import can_send
 import canbus
 import j1939
 
@@ -51,6 +58,15 @@ def update(entry, data, t):
     entry["count"] += 1
     entry["last"] = t
     entry["data"] = data
+
+
+def parse_send(text):
+    """--send "PGN:SA:DATA" (all hex) into a frame."""
+    try:
+        pgn, sa, data = text.split(":", 2)
+        return can_send.build_message(int(pgn, 16), int(sa, 16), can_send.parse_hex(data))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected PGN:SA:DATA in hex, e.g. F004:00:FF FF FF 40 1F, got {text!r}")
 
 
 def render(seen, now, start, errors, last_error, requests):
@@ -115,6 +131,9 @@ def main():
     canbus.add_bus_args(ap)
     ap.add_argument("--log", help="CSV file to write every frame to")
     ap.add_argument("--poke", action="store_true", help="send a Request for Address Claimed at start")
+    ap.add_argument("--send", type=parse_send, action="append", default=[], metavar="PGN:SA:DATA",
+                    help="send this frame periodically while listening (repeatable)")
+    ap.add_argument("--send-period", type=float, default=0.1, help="seconds between --send frames (default 0.1)")
     ap.add_argument("--quiet", action="store_true", help="only print new PGNs, requests and claims")
     ap.add_argument("--live", action="store_true", help="live table instead of one line per frame")
     ap.add_argument("--seconds", type=float, help="stop after this many seconds")
@@ -125,6 +144,11 @@ def main():
 
     if args.poke:
         bus.send(can.Message(arbitration_id=j1939.make_id(0xEA00, 0xF9), data=[0x00, 0xEE, 0x00], is_extended_id=True))
+    tasks = []
+    for msg in args.send:
+        print(f"Sending every {args.send_period * 1000:g} ms: {msg.arbitration_id:08X}  {bytes(msg.data).hex(' ')}  "
+              f"{j1939.describe(msg.arbitration_id, bytes(msg.data))}")
+        tasks.append(bus.send_periodic(msg, args.send_period))
 
     seen = defaultdict(new_entry)
     requests = set()
@@ -142,7 +166,7 @@ def main():
             if args.live and t >= next_draw:
                 draw(render(seen, t, start, sum(errors.values()), last_error, requests))
                 next_draw = t + LIVE_REFRESH
-            # Not is_rx: the adapter echoing a frame we sent (--poke).
+            # Not is_rx: the adapter echoing a frame we sent (--poke, --send).
             if msg is None or not msg.is_rx:
                 continue
             if log:
@@ -171,6 +195,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        for task in tasks:
+            task.stop()
         canbus.close_bus(bus)
         if log:
             log.close()

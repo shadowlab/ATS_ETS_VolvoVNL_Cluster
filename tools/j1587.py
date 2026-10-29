@@ -9,6 +9,7 @@ docs/messages.md), not checked against the paid SAE documents.
 """
 
 MAX_FRAME = 21
+DATA_LINK_ESCAPE = 254
 
 MID_NAMES = {
     128: "Engine",
@@ -81,7 +82,8 @@ def _param_spans(data):
         start = i
         pid = data[i]
         i += 1
-        if pid == 255:
+        extended = pid == 255
+        if extended:
             if i >= len(data):
                 return [len(data) + 1]
             pid = data[i]
@@ -90,6 +92,10 @@ def _param_spans(data):
             i += 1
         elif pid < 192:
             i += 2
+        elif pid == DATA_LINK_ESCAPE and not extended:
+            if i + 1 >= len(data):
+                return [len(data) + 1]
+            i += 2 + data[i + 1]
         else:
             if i >= len(data):
                 return [len(data) + 1]
@@ -109,6 +115,12 @@ def parse_params(data):
             pid = 256 + data[i]
             i += 1
         low = pid & 0xFF
+        if pid == DATA_LINK_ESCAPE and i + 1 < len(data):
+            # Seen on the bench: PID 254, destination MID, length, data.
+            size = data[i + 1]
+            params.append((pid, bytes([data[i]]) + bytes(data[i + 2:i + 2 + size])))
+            i += 2 + size
+            continue
         if low < 128:
             size = 1
         elif low < 192:
@@ -128,7 +140,9 @@ def describe(frame):
     parts = [f"MID {mid} {MID_NAMES.get(mid, '')}".rstrip()]
     for pid, value in parse_params(frame[1:-1]):
         text = f"PID {pid} {PID_NAMES.get(pid, '')}".rstrip() + f" [{value.hex(' ')}]"
-        if pid == 0 and value:
+        if pid == DATA_LINK_ESCAPE and value:
+            text = f"PID 254 data link escape to MID {value[0]} [{value[1:].hex(' ')}]"
+        elif pid == 0 and value:
             text += f" asks for PID {value[0]} {PID_NAMES.get(value[0], '')}".rstrip()
         elif pid == 128 and len(value) == 2:
             text += f" asks MID {value[1]} for PID {value[0]} {PID_NAMES.get(value[0], '')}".rstrip()
