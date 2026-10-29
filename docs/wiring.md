@@ -53,9 +53,14 @@ SN65HVD230 at the far end of the bus from the cluster.
 end. First measure A:15 to A:16 on the cluster alone, power off:
 
 - About 120 Ω: the cluster terminates its own end.
+- About 60–70 Ω: the cluster terminates the whole bus by itself, so add no
+  other terminator: CANable jumper off in both stages, and remove the
+  SN65HVD230's 120 Ω in stage 2. Lab's cluster reads about 68 Ω, so this is
+  the case on this bench.
 - Open: add a loose 120 Ω across A:15/A:16 at the cluster.
 
-The other end depends on the stage:
+If the cluster terminates only its own end, the other end depends on the
+stage:
 
 - **Stage 1:** the CANable is the far end. Fit its 120 Ω jumper.
 - **Stage 2:** the SN65HVD230 is the far end. Most of these boards carry
@@ -83,18 +88,29 @@ and keep the 4.7 kΩ bias resistors R1/R2 ([parts.md](parts.md#notes-on-the-j170
 | GND | SN65HVD230 GND, common ground | |
 | GPIO4 | SN65HVD230 CTX | TWAI TX |
 | GPIO5 | SN65HVD230 CRX | TWAI RX |
-| 5V (VBUS) | XY-485 VCC | 5 V supply |
+| 3V3 | XY-485 VCC | 3.3 V supply |
 | GPIO17 | XY-485 TXD | UART1 TX |
 | GPIO18 | XY-485 RXD | UART1 RX |
 | GND | XY-485 GND, common ground | |
 | GPIO6 | logic analyzer CH4 only | Sweep marker, once firmware toggles it |
 
-In stage 1 only the XY-485 rows (5V, GPIO17, GPIO18, GND) are wired; the
+In stage 1 only the XY-485 rows (3V3, GPIO17, GPIO18, GND) are wired; the
 SN65HVD230 rows are stage 2.
 
 Everything on the ESP32 side is 3.3 V logic. The SN65HVD230 runs from 3.3 V.
-The XY-485 is fed 5 V and its onboard regulator brings the MAX485 down to
-3.3 V, so its TXD and RXD are 3.3 V too. Never put 5 V on an ESP32-S3 GPIO.
+The XY-485 accepts 3–30 V on VCC through an onboard regulator, and its
+MAX485 and CD4069UB auto-direction inverter run from that regulated rail.
+The MAX485's RXD swings to its own supply, so feeding VCC from the ESP32's
+3V3 pin keeps RXD at or below 3.3 V whatever regulator the board carries.
+The MAX485 then runs at about 3.1 V, below its 4.75–5.25 V rating, which is
+usually fine at 9600 baud. Never put 5 V on an ESP32-S3 GPIO.
+
+Why not the 5V pin: on many ESP32-S3 boards it isn't connected to USB, so it
+only works as a power input (Lab's reads about 1.3 V with USB plugged in).
+Some boards join it with an IN-OUT solder bridge. If J1708 reception is
+flaky, feeding VCC with 5 V gives the MAX485 a full 3.3 V from the module's
+regulator; that was measured on Lab's board (pin 8 at 3.29 V from 5 V in), so
+TXD/RXD stay at 3.3 V that way too.
 
 The pins are a suggestion: the TWAI controller and UART1 can use almost any
 GPIO. These avoid the strapping pins (0, 3, 45, 46), native USB (19, 20) and
@@ -111,7 +127,7 @@ Notes:
   with 10 kΩ.
 - In stage 1, J1708 reaches the PC through the ESP32, which needs a small
   UART-to-USB passthrough sketch. A 3.3 V USB-serial adapter can take the
-  ESP32's place on the XY-485 (VCC 5 V, TXD, RXD, GND) for `j1708_listen.py`
+  ESP32's place on the XY-485 (VCC, TXD, RXD, GND) for `j1708_listen.py`
   instead.
 
 ## Logic analyzer (8 channels)
@@ -125,6 +141,11 @@ Notes:
 | CH4 | GPIO6 (stage 2) | Sweep marker from the firmware, to line captures up with candidates |
 | CH5–7 | spare | |
 | GND | common ground | |
+
+The analyzer's CHn silkscreen is sigrok's Dn, as PulseView and
+`tools/la_capture.py` name them. Setup
+and a self-test that needs only the ESP32 are in the
+[tools README](../tools/README.md#logic-analyzer-lonely-binary-8-channel).
 
 Probe the 3.3 V logic side only, never the 12 V lines, CAN H/L or J1708 A/B.
 In PulseView, decode CH1 as CAN at 250 kbit/s and CH3 as UART at 9600 8N1.

@@ -11,6 +11,8 @@ three things python-can 4.6 doesn't do on its own:
   The timing is worked out here from the clock the device reports instead.
 - Shutdown can raise from the device reset python-can does on close.
 
+set_gs_usb_mode() switches an open candleLight bus to loopback or listen-only, and describe_error() puts error frames into words.
+
 Never format a GsUsbBus with str() or an f-string: python-can's __str__ for
 it returns an int and raises TypeError.
 """
@@ -21,6 +23,8 @@ import can
 
 SAMPLE_POINT = 87.5
 MIN_TSEG2 = 3  # keeps SJW at 3, as in the timing tested on the CANable 2.0
+GS_USB_BREQ_MODE = 2  # gs_usb control request and mode, as in gs_usb.gs_usb
+GS_CAN_MODE_START = 1
 
 
 def add_bus_args(ap):
@@ -107,7 +111,56 @@ def open_gs_usb(index, bitrate, sample_point=SAMPLE_POINT, fclk=None):
         raise
     finally:
         can.BitTiming.from_sample_point = original
+    bus.vnl_timing = timing
     return bus
+
+
+def set_gs_usb_mode(bus, loopback=False, listen_only=False):
+    """Restart an open gs_usb bus in another mode, keeping our bit timing.
+    False if the firmware doesn't offer the mode (the bus is left as it was)."""
+    from gs_usb import constants as c
+    from gs_usb.gs_usb_structures import DeviceMode
+
+    dev = bus.gs_usb
+    want = (c.GS_CAN_MODE_LOOP_BACK if loopback else 0) | (c.GS_CAN_MODE_LISTEN_ONLY if listen_only else 0)
+    feature = dev.device_capability.feature
+    if want & ~feature:
+        return False
+    # The mode request directly, as the Linux driver does: GsUsb.start() resets
+    # the USB device first, and the timing has to be set again after a stop.
+    dev.stop()
+    t = bus.vnl_timing
+    dev.set_timing(prop_seg=1, phase_seg1=t.tseg1 - 1, phase_seg2=t.tseg2, sjw=t.sjw, brp=t.brp)
+    dev.device_flags = want | (feature & c.GS_CAN_MODE_HW_TIMESTAMP)
+    dev.gs_usb.ctrl_transfer(0x41, GS_USB_BREQ_MODE, 0, 0, DeviceMode(GS_CAN_MODE_START, dev.device_flags).pack())
+    return True
+
+# SocketCAN error frame classes (linux/can/error.h), which candleLight uses.
+ERROR_CLASSES = [(0x001, "TX timeout"), (0x002, "lost arbitration"), (0x004, "controller"),
+                 (0x008, "protocol violation"), (0x010, "transceiver"), (0x020, "no ACK"),
+                 (0x040, "bus off"), (0x080, "bus error"), (0x100, "restarted")]
+CONTROLLER_STATES = [(0x01, "RX overflow"), (0x02, "TX overflow"), (0x04, "RX warning"),
+                     (0x08, "TX warning"), (0x10, "RX passive"), (0x20, "TX passive"), (0x40, "back to active")]
+PROTOCOL_ERRORS = [(0x01, "bit"), (0x02, "form"), (0x04, "stuff"), (0x08, "dominant bit"),
+                   (0x10, "recessive bit"), (0x20, "overload"), (0x40, "active error"), (0x80, "while sending")]
+
+
+def error_classes(msg):
+    return {name for bit, name in ERROR_CLASSES if msg.arbitration_id & bit}
+
+
+def describe_error(msg, counters=True):
+    """Plain words for an error frame, with the TX/RX error counters."""
+    data = bytes(msg.data) + bytes(8)
+    parts = [name for bit, name in ERROR_CLASSES if msg.arbitration_id & bit]
+    if msg.arbitration_id & 0x004:
+        parts += [name for bit, name in CONTROLLER_STATES if data[1] & bit]
+    if msg.arbitration_id & 0x008:
+        parts += [name + " error" for bit, name in PROTOCOL_ERRORS if data[2] & bit]
+    text = ", ".join(parts) or f"error frame {msg.arbitration_id:08X}"
+    if counters and msg.dlc >= 8:
+        text += f" (TX errors {data[6]}, RX errors {data[7]})"
+    return text
 
 
 def open_bus(args):

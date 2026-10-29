@@ -105,6 +105,40 @@ class GsUsbTest(unittest.TestCase):
                 canbus.open_gs_usb(0, 250_000)
         self.assertTrue(made[0]._is_shutdown)
 
+    def test_mode_switch_keeps_timing(self):
+        from gs_usb import constants as c
+
+        dev = FakeDevice()
+        dev._capability.feature = c.GS_CAN_MODE_LOOP_BACK | c.GS_CAN_MODE_HW_TIMESTAMP
+        dev.ctrl_transfer = mock.Mock()
+        p1, p2, p3 = self.patches([dev])
+        with p1, p2, p3:
+            bus = canbus.open_gs_usb(0, 250_000)
+            FakeDevice.holders = 0
+            dev.timing = None
+            dev.stop = mock.Mock()
+            self.assertTrue(canbus.set_gs_usb_mode(bus, loopback=True))
+            self.assertEqual(dev.timing, (1, 15, 3, 3, 34))
+            self.assertEqual(dev.device_flags, c.GS_CAN_MODE_LOOP_BACK | c.GS_CAN_MODE_HW_TIMESTAMP)
+            FakeDevice.holders = 0  # reads through the bus's own handle, which is fine on WinUSB
+            self.assertFalse(canbus.set_gs_usb_mode(bus, listen_only=True))
+            canbus.close_bus(bus)
+
+
+class ErrorFrameTest(unittest.TestCase):
+    def frame(self, classes, data):
+        return can.Message(arbitration_id=classes, is_error_frame=True, is_extended_id=False, dlc=8, data=data)
+
+    def test_no_ack(self):
+        msg = self.frame(0x24, [0, 0x20, 0, 0, 0, 0, 128, 0])
+        self.assertEqual(canbus.describe_error(msg), "controller, no ACK, TX passive (TX errors 128, RX errors 0)")
+        self.assertEqual(canbus.describe_error(msg, counters=False), "controller, no ACK, TX passive")
+        self.assertIn("no ACK", canbus.error_classes(msg))
+
+    def test_protocol(self):
+        msg = self.frame(0x08, [0, 0, 0x04, 0, 0, 0, 0, 9])
+        self.assertEqual(canbus.describe_error(msg, counters=False), "protocol violation, stuff error")
+
 
 if __name__ == "__main__":
     unittest.main()
