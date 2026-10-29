@@ -8,7 +8,7 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `can_selftest.py` | Checks the CANable, with or without the cluster: opens it, loops frames back through it, tests sending, and checks whether anything on CAN1 ACKs |
 | `can_listen.py` | Logs CAN1 and summarizes each source and PGN, with Requests (0xEA00) and Address Claimed (0xEE00) decoded; `--live` for a table that updates in place; error frames counted and explained |
 | `can_send.py` | Sends one PGN on repeat, for hand tests and waking the cluster |
-| `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter on the XY-485 |
+| `j1708_listen.py` | Logs J1708/J1587 frames from a USB-serial adapter or the ESP32 bridge on the XY-485; `--send` repeats a frame of your own onto the bus |
 | `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
 | `sweep_watch.py` | Unattended J1939 sweep with a camera watching the cluster; logs hits with before and after pictures |
@@ -200,6 +200,16 @@ point at A/B swapped or no bias, and silence at power or wiring; the messages
 say what to check. The echo step sends three harmless test frames and looks
 for them coming back. An auto-direction XY-485 often doesn't echo, so no echo
 is only information. Use `--no-cluster` with the cluster off.
+
+To make the cluster hear something on J1708 while logging what it says, add
+`--send`. The frame is the MID and data as hex, and the checksum is added:
+
+```
+python j1708_listen.py --port COM11 --send "80 BE 40 1F" --send-period 0.1 --log j1708_send.csv
+```
+
+That's MID 128 (engine) with PID 190 (engine speed) set to 0x1F40. It goes
+through the ESP32 bridge firmware, which puts each frame on the bus once it's idle.
 
 Save the logs, and copy what the cluster requested into
 [docs/messages.md](../docs/messages.md).

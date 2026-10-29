@@ -5,6 +5,7 @@ import unittest
 
 import can_listen
 import j1587
+import j1708_listen
 import j1939
 
 
@@ -50,6 +51,18 @@ class J1587Test(unittest.TestCase):
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
+
+
+class SendArgTest(unittest.TestCase):
+    def test_parse_send_adds_checksum(self):
+        frame = j1708_listen.parse_send("80 BE 40 1F")
+        self.assertEqual(frame, j1587.make_frame(0x80, [0xBE, 0x40, 0x1F]))
+        self.assertTrue(j1587.is_valid(frame))
+
+    def test_parse_send_rejects_bad_input(self):
+        for text in ("", "80", "zz 01", "80 " + "01 " * 25):
+            with self.assertRaises(argparse.ArgumentTypeError, msg=text):
+                j1708_listen.parse_send(text)
 
 
 class LiveViewTest(unittest.TestCase):
