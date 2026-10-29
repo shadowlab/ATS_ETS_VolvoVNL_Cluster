@@ -81,6 +81,8 @@ def main():
             if frames is None:
                 bad += 1
                 print(f"BAD {t - start:9.3f}  {chunk.hex(' ')}")
+                if writer:
+                    writer.writerow([f"{t:.4f}", "", chunk.hex(" "), "BAD: not a valid frame"])
             else:
                 for frame in frames:
                     counts[frame[0]] += 1
