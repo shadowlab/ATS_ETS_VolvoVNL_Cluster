@@ -142,6 +142,38 @@ several PGNs from one program (a small tool change, or the ESP32). If no run
 changes SID 201, the camera sweep of FF00-FFFF from these addresses is next,
 watching SID 201 as well as the camera.
 
+### Lamp tests, once the VECU address is known
+
+More of Lab's untested notes, checked against the J1939 layouts as we know
+them (from memory, not the paid spec):
+
+- **DM1 (PGN 65226, 0xFECA) drives the MIL and warning lamps.** Plausible:
+  byte 1 is the lamp status, two bits each: bits 8-7 MIL, 6-5 red stop,
+  4-3 amber warning, 2-1 protect (00 off, 01 on). Byte 2 is the matching
+  flash bits (FF = not available). Bytes 3-6 hold one fault code. Every
+  module sends its own DM1, so the engine (SA 0x00) is the first source to
+  try.
+- **Parking brake comes from CCVS1 SPN 70.** The notes say PGN 65134,
+  byte 1 bits 5-6. Corrected: CCVS1 is PGN 65265 (0xFEF1); 65134 (0xFE6E) is
+  high resolution wheel speed. SPN 70 is byte 1 bits 4-3 (00 released,
+  01 set); bits 6-5 are cruise pause. The notes and J1939 agree that 01 means
+  set.
+
+The cluster already shows STOP, check engine and battery lamps with nothing
+sent, so first try turning lamps off, then on.
+
+| Lamp | Command (`can_send.py --channel COM5 ...`) | Then |
+|---|---|---|
+| All engine lamps off | `--pgn FECA --sa 00 --data "00 FF 00 00 00 00 FF FF" --period 1` | STOP and check engine go out? |
+| MIL on | Same with `--data "40 FF 00 00 00 00 FF FF"` | Check engine lamp |
+| Amber warning on | `"04 FF ..."` | |
+| Red stop on | `"10 FF ..."` | |
+| Parking brake set | `--pgn FEF1 --sa <VECU> --data "F7 00 32" --period 0.1` | Parking brake lamp on |
+| Parking brake released | Same with `"F3 00 32"` | Lamp off |
+
+`F7`: SPN 70 = 01, the other byte 1 fields not available. `00 32` is still
+50 km/h.
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |
