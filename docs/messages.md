@@ -229,6 +229,34 @@ Requesting Component ID is a separate one-off:
 
     python can_send.py --channel COM5 --pgn EA00 --sa F9 --da 17 --data "EB FE 00" --period 0
 
+### Lessons from a Volvo P2 car cluster project
+
+Lab found VolvoDIM (A. J. Gabler, 2021), an Arduino library that drives a
+P2 (S60/V70 era) car cluster. That car bus is 125 kbit/s with Volvo
+proprietary 29-bit IDs, not J1939, so none of its IDs or payloads apply to
+the VNL. What may carry over is the method:
+
+- **Send everything, all the time.** It loops through 14 frames, one every
+  pass, including ones that only exist as keep-alives (brakes, a "4C"
+  module). The cluster wants all its partners present, not just the gauge
+  frame. `can_wake.py` follows the same idea.
+- **Fake the modules the cluster misses.** It sends short init bursts for
+  the airbag module and the "4C" module so the cluster doesn't raise a
+  missing-module fault. For us that is the VECU (SID 201) and maybe the
+  airbag module, MID 232 on J1708.
+- **Changing bytes.** Its airbag frame cycles the top two bits of byte 1
+  (alive counter), and a vehicle config frame is sent as 16 numbered pages
+  (0x10-0x1F) in rotation. A cluster may ignore a partner whose frame never
+  changes or that never sends its configuration. Our cluster sends PID 254
+  polls to MID 128 with a changing third byte, which may be the same kind of
+  handshake waiting for an answer.
+- **Power-cycle between tries.** It switches the cluster's power with a
+  relay, so each test starts from a clean boot. A relay or switch on A:3
+  (and A:1) on our bench would do the same and makes "send before key-on"
+  tests repeatable.
+- Its start-up wait is only 20 loop passes before the odometer counts, not
+  a long delay before gauges respond.
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |
