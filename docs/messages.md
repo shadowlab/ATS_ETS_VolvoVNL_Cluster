@@ -174,6 +174,32 @@ sent, so first try turning lamps off, then on.
 `F7`: SPN 70 = 01, the other byte 1 fields not available. `00 32` is still
 50 km/h.
 
+### Power-up sequence and sweep IDs (Lab's notes, checked)
+
+A third set of untested notes describes a wake-up sequence and sweep IDs.
+Checked against the bench and the J1939 layouts (from memory):
+
+| Claim in the notes | Check |
+|---|---|
+| With battery only, CAN is silent until the VMCU wakes the cluster | Not on our bench: with A:1 + A:3 the cluster talks on CAN1 and J1708 on its own |
+| VEP1 (65271, 0xFEF7) from SA 0x21, id 0x18FEF721, byte 1 carries ignition state | PGN and id are right. Byte 1 is net battery current. The useful field is SPN 158, keyswitch battery potential, bytes 7-8 (0.05 V/bit); battery potential SPN 168 is bytes 5-6. Worth sending: it may be how the cluster learns the key is on |
+| Start engine and VMCU frames within 50 ms or the cluster aborts with a red datalink fault | No source, and we have never seen such a screen. Treat as unverified |
+| Tach: EEC1, id 0x0CF00400, bytes 4-5, 0.125 rpm/bit, every 20 ms | Matches what we sent, except we sent priority 6 (id 0x18F00400) every 10 ms. Priority 3 at 20 ms is the standard and cheap to try |
+| Speed: PGN 65134, id 0x0CFE6E21, bytes 2-3, 1/256 km/h | 65134 (0xFE6E) is high resolution wheel speed. Road speed is CCVS1 (65265, 0xFEF1) bytes 2-3, 1/256 km/h, normally id 0x18FEF1xx. 40000 raw is 156 km/h (97 mph); the notes say MPH but the unit is km/h |
+| Air tanks: PGN 65252, id 0x0CFEE40B, bytes 1-2, 8 kPa/bit, 0 to 250 | 65252 (0xFEE4) is Shutdown, not air. Air is AIR1 (65198, 0xFEAE): SPN 1087/1088 service brake circuits 1 and 2 in bytes 3-4, 8 kPa/bit. 250 raw is 2000 kPa, far over a real tank (about 0-150 psi, raw 0-130). Also, the cluster sends AIR1 itself (seen above) because the air sensors are wired to connector B, so it probably won't take air pressure from the bus |
+| Use 29-bit extended frames | Right. Every tool here sends extended frames (`is_extended_id=True`); the ESP32 firmware doesn't send CAN yet, so stage 2 must set `.extd = 1` |
+
+#### Tests that don't need the VECU address
+
+| Test | Command (`can_send.py --channel COM5 ...`) |
+|---|---|
+| EEC1 at standard priority and rate, 1000 rpm | `--pgn F004 --sa 00 --priority 3 --data "FF FF FF 40 1F" --period 0.02` |
+| Engine lamps off (DM1) | see the lamp table above |
+
+The VEP1 key-on test needs a source address, so it joins the VECU search:
+`--pgn FEF7 --sa 27 --data "FF FF FF FF 14 01 14 01" --period 0.1` (13.8 V
+battery and keyswitch), then `--sa 21`, watching SID 201 as before.
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |
