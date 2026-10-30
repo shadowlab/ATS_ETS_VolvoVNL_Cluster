@@ -200,6 +200,35 @@ The VEP1 key-on test needs a source address, so it joins the VECU search:
 `--pgn FEF7 --sa 27 --data "FF FF FF FF 14 01 14 01" --period 0.1` (13.8 V
 battery and keyswitch), then `--sa 21`, watching SID 201 as before.
 
+### Boot handshake notes (Lab's notes, checked)
+
+Another untested set describes a three-phase boot. Most of it repeats the
+claims above; what's new:
+
+| Frame in the notes | Check |
+|---|---|
+| VEP1 0x18FEF721, `FF FF FF FF FF FF 5C 1D` | Right PGN and field (keyswitch potential, bytes 7-8), wrong value: 0x1D5C x 0.05 V = 376 V. 13.8 V is `14 01` |
+| Request 0x18EAEC21 for PGN 65024 (`00 FE 00`) to check the cluster is alive | 0xEC is not the cluster, which is SA 0x17 (0x8C is its J1587 MID 140). 65024 (0xFE00) is not Component ID; that is 65259 (0xFEEB). Asking the cluster for 0xFEEB and Software ID 0xFEDA is a harmless test that may give its part number and software version |
+| EEC1 0x0CF00400, `F0 7D 83 00 00 00 F0 00` | Realistic: torque mode, 0 % driver demand (0x7D), 6 % actual torque, 0 rpm, engine as controlling source. We sent FF in those fields, so retrying 1000 rpm with them filled is worth it |
+| Speed on 0x0CFE6E21 (PGN 65134), all 00 except byte 5 = 0x3F | Same PGN mistake as before; CCVS1 (0xFEF1) instead. All 00 in CCVS1 would mean speed 0, parking brake released |
+| Air on 65252, oil on 65262, red screen if missing in 100 ms | 65252 is Shutdown and 65262 is ET1 (engine temperature). Oil pressure is EFL/P1 (65263, 0xFEEF) byte 4, 4 kPa/bit. Air is wired to the cluster. No support for the 100 ms claim |
+| DM1 0x18FECA00, `00 FF 00 00 00 00 00 00` every 1 s | Right: byte 1 = 00 is all lamps off, byte 2 FF. A no-fault DM1 normally ends in `FF FF`. Same as the lamp-off test above |
+
+#### Scripted wake: `can_wake.py`
+
+`tools/can_wake.py` turns this into one test: a few seconds of silence, then
+everything at once at the usual J1939 rates: VEP1 (13.8 V battery and
+keyswitch) and CCVS1 from the VECU address, EEC1 (priority 3, 20 ms, torque
+fields filled), ET1, EFL/P1 and a lamps-off DM1 from the engine. With several
+VECU addresses it tries each in turn:
+
+    python can_wake.py --channel COM5 --vecu 27,21,31 --dwell 30 --rpm 1000 --kmh 50
+
+Run `j1708_listen.py` alongside and watch SID 201, the needles and the lamps.
+Requesting Component ID is a separate one-off:
+
+    python can_send.py --channel COM5 --pgn EA00 --sa F9 --da 17 --data "EB FE 00" --period 0
+
 ## Confirmed on the bench
 
 | Date | Bus | ID / MID-PID | Payload | Effect |

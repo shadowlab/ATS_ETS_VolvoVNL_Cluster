@@ -4,6 +4,7 @@ import argparse
 import unittest
 
 import can_listen
+import can_wake
 import j1587
 import j1708_listen
 import j1939
@@ -76,6 +77,17 @@ class J1587Test(unittest.TestCase):
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
+
+
+class WakeTest(unittest.TestCase):
+    def test_heartbeats(self):
+        frames = {name: msg for name, _, msg in can_wake.heartbeats(0x27, 1000, 50, 13.8)}
+        self.assertEqual(frames["EEC1"].arbitration_id, 0x0CF00400)
+        self.assertEqual(bytes(frames["EEC1"].data[3:5]), b"\x40\x1f")
+        self.assertEqual(frames["CCVS1"].arbitration_id, 0x18FEF127)
+        self.assertEqual(bytes(frames["CCVS1"].data[:3]), b"\xf3\x00\x32")
+        self.assertEqual(bytes(frames["VEP1"].data[4:]), b"\x14\x01\x14\x01")
+        self.assertEqual(frames["VEP1"].arbitration_id, 0x18FEF727)
 
 
 class SendArgTest(unittest.TestCase):
