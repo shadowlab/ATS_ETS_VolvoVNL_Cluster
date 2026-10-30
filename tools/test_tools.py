@@ -59,6 +59,19 @@ class J1587Test(unittest.TestCase):
                                                                bytes.fromhex("8c fc 03 74 0a 29 ce"), short])
         self.assertIn("data link escape to MID 128 [d4 80 69 80]", j1587.describe(short))
         self.assertIn("to MID 127", j1587.describe(long))
+        self.assertIn("SID 201 Data link, vehicle ECU (MID 144) FMI 12 device lost (active, x1)",
+                      j1587.describe(long))
+
+    def test_diag_codes(self):
+        # The cluster's own list, joined from its two PID 192 sections.
+        codes = j1587.decode_diag_codes(bytes.fromhex("75 a4 03 ab a5 03 54 a9 03 76 a4 03 b1 a9 03 60 a5 03 4d a5 03"))
+        self.assertEqual(len(codes), 7)
+        self.assertEqual(codes[0], "PID 117 Air pressure primary FMI 4 shorted low (active, x3)")
+        self.assertEqual(codes[2], "PID 84 Road speed FMI 9 abnormal update rate (active, x3)")
+        self.assertEqual(j1587.decode_diag_codes(bytes([22, 0x89, 3])),
+                         ["PID 278 FMI 9 abnormal update rate (active, x3)"])
+        self.assertEqual(j1587.decode_diag_codes(bytes([200, 0xF9])),
+                         ["SID 200 Data link, engine ECU (MID 128) FMI 9 abnormal update rate (inactive)"])
 
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))

@@ -62,16 +62,51 @@ Same session, through the ESP32 bridge. Frames are MID + data + checksum.
 
 | Rate | Frame | Reading |
 |---|---|---|
-| ~1.1 s | PID 192 twice: `c2 10 15 75 a4 03 ab a5 03 54 a9 03 76 a4 03 b1 a9` and `c2 11 03 60 a5 03 4d a5 03` | The cluster's own fault list, 7 entries with first bytes 0x75, 0xAB, 0x54, 0x76, 0xB1, 0x60, 0x4D (PIDs 117, 171, 84, 118, 177, 96, 77). Most match the unconnected analog inputs (air pressure, ambient and gearbox oil temperature, fuel level). It never changed while we sent engine data. |
+| ~1.1 s | PID 192 twice: `c2 10 15 75 a4 03 ab a5 03 54 a9 03 76 a4 03 b1 a9` and `c2 11 03 60 a5 03 4d a5 03` | Multisection (sections 1 and 2) carrying PID 194, the cluster's own diagnostic codes. Decoded below. It never changed while we sent engine data. |
 | 10 s | PID 245 `2b 0d 55 00` | Odometer, 0x00550D2B, about 557,000 mi |
 | 10 s | PID 251 and 252 | Clock and date |
 | 10 s | PID 128 request: MID 128, PID 250 | Asks the engine for total fuel used |
 | key-on | PID 128 request: MID 128, PID 98 | Asks the engine for oil level, seven times, then stops |
 | 10 s | PID 254 to MID 128: `d4 80 69 80`, `d4 80 6b 80`, `d4 80 6c 80` | Proprietary polls of the engine with a changing third byte |
-| 10 s | PID 254 to MID 127, 15 bytes: `d4 c2 0c c8 b9 04 16 89 03 c9 bc 01 eb bc 01` | Proprietary; carries fault-code triplets |
+| 10 s | PID 254 to MID 127, 15 bytes: `d4 c2 0c c8 b9 04 16 89 03 c9 bc 01 eb bc 01` | Carries PID 194: the cluster's data link faults. Decoded below |
 | once | PID 254 to MID 142: `d4 d9 05 65 6e 67 47 42` | Ends in ASCII "engGB", maybe the display language |
 
 PID 254 frames are `fe`, destination MID, length, data, in the frames seen so far.
+
+### The cluster's fault codes, decoded
+
+PID 194 codes are an id byte, a code byte, and an occurrence count. Code byte
+bits: 8 count included, 7 inactive, 6 standard (clear means a page 2 PID),
+5 SID rather than PID, 4-1 FMI. SIDs 200-250 are Volvo data link codes from
+bulletin 371-44, see [data_links.md](data_links.md). All are active.
+
+PID 192 list (sensors and data the cluster is missing):
+
+| Code | Meaning |
+|---|---|
+| PID 117 FMI 4 | Primary air pressure, voltage low (sensor not wired) |
+| PID 171 FMI 5 | Ambient air temperature, open circuit |
+| PID 84 FMI 9 | Road speed, abnormal update rate: expected over a data link |
+| PID 118 FMI 4 | Secondary air pressure, voltage low |
+| PID 177 FMI 9 | Transmission oil temperature, abnormal update rate |
+| PID 96 FMI 5 | Fuel level, open circuit |
+| PID 77 FMI 5 | Forward rear drive axle temperature, open circuit |
+
+PID 254 to MID 127 (data link faults):
+
+| Code | Meaning |
+|---|---|
+| SID 200 FMI 9, x4 | Engine ECU (MID 128): heard, but needed data missing |
+| PID 278 (page 2 PID 22) FMI 9, x3 | Unknown, probably Volvo proprietary |
+| SID 201 FMI 12, x1 | Vehicle ECU (MID 144): not heard at all |
+| SID 235 FMI 12, x1 | Unknown module lost; not in the bulletin |
+
+So the cluster sees something from the engine, but nothing from the VECU.
+The bulletin says the cluster uses the VECU's J1939 messages, and on a Volvo
+the key switch goes to the VECU, so the parked needles may be waiting for
+it. Next test: send from a candidate VECU source address and watch SID 201
+change from FMI 12 to FMI 9 or go inactive. 0x27 is a guess for the VECU's
+J1939 address (not from the bulletin); the sweep's 0x21 and 0x31 are others.
 
 ## Confirmed on the bench
 

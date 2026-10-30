@@ -39,6 +39,7 @@ the bridge has to fake that ECU too.
 | [`docs/parts.md`](docs/parts.md) | Parts list: bought, on hand, still to buy |
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
+| [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
 | `firmware/` | ESP32-S3 bridge firmware (to come) |
 | [`tools/`](tools/) | Bus listeners, a frame sender and the camera-watched sweep |
 
