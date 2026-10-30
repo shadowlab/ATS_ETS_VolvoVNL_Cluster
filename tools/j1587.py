@@ -5,7 +5,8 @@ A J1708 frame is MID + data + checksum, where the checksum makes the byte sum
 usually hides, so frames are also split by checksum.
 
 MID and PID numbers are standard SAE assignments from memory (see
-docs/messages.md), not checked against the paid SAE documents.
+docs/messages.md), not checked against the paid SAE documents. The MID list
+and SIDs 200-250 come from Volvo service bulletin 371-44 (docs/data_links.md).
 """
 
 MAX_FRAME = 21
@@ -16,8 +17,16 @@ MID_NAMES = {
     130: "Transmission",
     136: "Brakes",
     140: "Instrument cluster",
-    142: "Vehicle management",
-    144: "Vehicle ECU (likely)",
+    142: "Satellite communications",
+    144: "Vehicle ECU",
+    146: "Climate control",
+    172: "Test tool",
+    206: "Radio",
+    216: "Lighting control module",
+    219: "VORAD",
+    232: "Airbag",
+    249: "Body builder module",
+    250: "Steering wheel module",
 }
 
 PID_NAMES = {
@@ -34,6 +43,56 @@ PID_NAMES = {
     194: "Diagnostic codes",
     245: "Total distance",
 }
+
+# Volvo data link SIDs from bulletin 371-44. A cluster fault on one of these
+# names the module it is missing.
+SID_NAMES = {
+    200: "Data link, engine ECU (MID 128)",
+    201: "Data link, vehicle ECU (MID 144)",
+    202: "Data link, instrument cluster (MID 140)",
+    204: "Data link, ABS (MID 136)",
+    210: "Data link, lighting control module (MID 216)",
+    214: "Data link, body builder module (MID 249)",
+    231: "J1939 data link",
+    250: "J1587/J1708 data link",
+}
+
+FMI_NAMES = {
+    0: "high", 1: "low", 2: "erratic", 3: "shorted high", 4: "shorted low",
+    5: "open circuit", 6: "short circuit", 7: "no mechanical response",
+    8: "abnormal frequency", 9: "abnormal update rate", 10: "abnormal rate of change",
+    11: "unknown failure", 12: "device lost", 13: "out of calibration", 14: "special",
+}
+
+
+def decode_diag_codes(data):
+    """Decode PID 194 diagnostic codes (the bytes after the count).
+
+    Each code is an id byte and a code byte, then an occurrence count when bit 8
+    of the code byte is set. Code byte: bit 7 inactive, bit 6 standard (clear
+    means a page 2 PID), bit 5 SID rather than PID, bits 4-1 FMI.
+    """
+    codes = []
+    i = 0
+    while i + 1 < len(data):
+        ident, code = data[i], data[i + 1]
+        i += 2
+        count = None
+        if code & 0x80 and i < len(data):
+            count = data[i]
+            i += 1
+        if code & 0x10:
+            kind, name = "SID", SID_NAMES.get(ident, "")
+        elif code & 0x20:
+            kind, name = "PID", PID_NAMES.get(ident, "")
+        else:
+            kind, name, ident = "PID", "", ident + 256
+        fmi = code & 0x0F
+        text = f"{kind} {ident}" + (f" {name}" if name else "") + f" FMI {fmi} {FMI_NAMES[fmi]}"
+        text += " (inactive" if code & 0x40 else " (active"
+        text += f", x{count})" if count is not None else ")"
+        codes.append(text)
+    return codes
 
 
 def checksum(body):
@@ -142,6 +201,13 @@ def describe(frame):
         text = f"PID {pid} {PID_NAMES.get(pid, '')}".rstrip() + f" [{value.hex(' ')}]"
         if pid == DATA_LINK_ESCAPE and value:
             text = f"PID 254 data link escape to MID {value[0]} [{value[1:].hex(' ')}]"
+            inner = value[2:]
+            if len(inner) >= 2 and inner[0] == 194 and inner[1] == len(inner) - 2:
+                text += " codes: " + "; ".join(decode_diag_codes(inner[2:]))
+        elif pid == 194 and value:
+            text += " codes: " + "; ".join(decode_diag_codes(value))
+        elif pid == 192 and len(value) >= 2:
+            text += f" section {(value[1] & 0x0F) + 1} of {(value[1] >> 4) + 1} of PID {value[0]}"
         elif pid == 0 and value:
             text += f" asks for PID {value[0]} {PID_NAMES.get(value[0], '')}".rstrip()
         elif pid == 128 and len(value) == 2:
