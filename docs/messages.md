@@ -104,9 +104,43 @@ PID 254 to MID 127 (data link faults):
 So the cluster sees something from the engine, but nothing from the VECU.
 The bulletin says the cluster uses the VECU's J1939 messages, and on a Volvo
 the key switch goes to the VECU, so the parked needles may be waiting for
-it. Next test: send from a candidate VECU source address and watch SID 201
-change from FMI 12 to FMI 9 or go inactive. 0x27 is a guess for the VECU's
-J1939 address (not from the bulletin); the sweep's 0x21 and 0x31 are others.
+it.
+
+### Next test: find the VECU's address
+
+Pass/fail signal: the cluster's PID 254 frame to MID 127, which
+`j1708_listen.py` now decodes. If SID 201 changes from FMI 12 (device lost)
+to FMI 9 (heard, data missing) or goes inactive, the cluster has heard its
+VECU. It repeats every 10 s, so give each candidate about 30 s.
+
+Lab found notes (untested, source unknown) that agree with this and give
+candidates:
+
+- The VECU ("VMCU") sends from SA 0x21 or 0x27, and streaming CCVS1
+  (PGN 65265, 0xFEF1) from it tells the cluster the truck is on.
+- A transmission heartbeat, ETC1 (PGN 61442, 0xF002, id 0x0CF00203 =
+  priority 3, SA 0x03), settles transmission faults. SID 235 FMI 12 might be
+  that.
+- EEC1 (0xF004) every 10-20 ms; slower data such as ET1 (0xFEEE, 65262,
+  engine temperature) every 100-500 ms. The J1939 standard rate for EEC1 is
+  20 ms (we used 10 ms), and 1 s for ET1.
+
+Runs, one at a time, with `j1708_listen.py` logging alongside. CCVS1 here is
+50 km/h (bytes 2-3, 1/256 km/h per bit); the rest is FF.
+
+| Run | Command (`can_send.py --channel COM5 ...`) | Watch for |
+|---|---|---|
+| 1 | `--pgn FEF1 --sa 27 --data "FF 00 32" --period 0.1` | SID 201 leaves FMI 12; any needle or speedo move |
+| 2 | Same with `--sa 21` | Same |
+| 3 | Same with `--sa 31` | Same |
+| 4 | `--pgn F002 --sa 03 --priority 3 --period 0.01` | SID 235 or PID 177 changes |
+
+If a run changes SID 201, keep that source address and add EEC1 from SA
+0x00 at the same time to see if the tach moves. `can_send.py` sends one PGN
+per run, and only one program can open the CANable, so that step needs
+several PGNs from one program (a small tool change, or the ESP32). If no run
+changes SID 201, the camera sweep of FF00-FFFF from these addresses is next,
+watching SID 201 as well as the camera.
 
 ## Confirmed on the bench
 
