@@ -57,6 +57,7 @@ import j1939
 
 HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after", "bus"]
 TRIED_FIELDS = ["time", "sa", "pgn", "payload", "change", "hit", "bus"]
+WINDOW_FIELDS = ["start", "end", "sa", "pgn", "payload"]  # epoch seconds, for sweep_crosscheck.py
 
 
 def parse_hex_list(text):
@@ -282,6 +283,24 @@ class Camera:
         self.running = False
         self.thread.join(timeout=1)
         self.cap.release()
+
+
+class NullCamera:
+    """Stands in for a camera with --camera none: a blank picture that never changes.
+
+    Sweeps then only send candidates and write tried.csv and windows.csv, for
+    use with a logic analyzer or a bus log and sweep_crosscheck.py."""
+
+    def __init__(self, tick=0.05):
+        self.tick = tick
+        self.blank = np.zeros((48, 64, 3), np.uint8)
+
+    def frame(self, timeout=2.0):
+        time.sleep(self.tick)
+        return self.blank.copy()
+
+    def close(self):
+        pass
 
 
 class ChangeDetector:
@@ -515,17 +534,6 @@ class J1708Reader:
         self.thread.join(timeout=1)
 
 
-class NullCamera:
-    """Stands in for the camera when a sweep relies on the bus watch alone."""
-
-    def frame(self, timeout=2.0):
-        time.sleep(0.05)
-        return np.zeros((8, 8, 3), np.uint8)
-
-    def close(self):
-        pass
-
-
 FAULT_REPORT = ("J1708", 140, 254, 127)   # the cluster's PID 254 fault report to MID 127, about every 15 s
 ENGINE_FRAMES = ("EEC1", "ET1", "EFL/P1", "DM1")
 
@@ -598,6 +606,9 @@ def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000
     best = 0.0
     end = time.time() + seconds
     while time.time() < end:
+        if isinstance(camera, NullCamera):
+            time.sleep(0.1)
+            continue
         score, _ = detector.diff(camera.frame())
         best = max(best, score)
     if wake:
@@ -667,6 +678,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         detector.adapt(idle)
 
         snapshot = watch.mark() if watch else None
+        sent_at = time.time()
         task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
@@ -682,6 +694,9 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         if task:
             task.stop()
 
+        append_row(os.path.join(out_dir, "windows.csv"), WINDOW_FIELDS, {
+            "start": f"{sent_at:.4f}", "end": f"{time.time():.4f}", "sa": f"{sa:02X}", "pgn": f"{pgn:05X}",
+            "payload": payload.hex()})
         camera_hit = best >= detector.min_area
         changed = watch.changes(snapshot) if watch else []
         bus_text = describe_changes(watch, changed, snapshot) if changed else ""
@@ -883,8 +898,6 @@ def cmd_sweep(args):
     bus = port = transport = reader = None
     background = []
     watch = None if args.no_bus_watch else BusWatch()
-    if args.camera == "none" and not watch:
-        raise SystemExit("--camera none needs the bus watch; leave out --no-bus-watch")
     if args.transport == "j1708":
         import serial
 
@@ -910,8 +923,10 @@ def cmd_sweep(args):
 
             port = serial.Serial(args.j1708_port, args.baud, timeout=0)
             reader = J1708Reader(port, watch)
-    if args.camera == "none":
+    if str(args.camera).lower() == "none":
         camera, detector = NullCamera(), ChangeDetector()
+        if not watch:
+            print("No camera and no bus watch: nothing will be detected here. Check the logs with sweep_crosscheck.py afterwards.")
     else:
         camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
         detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
@@ -956,7 +971,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def camera_args(p):
-        p.add_argument("--camera", default="0", help="camera number or stream address; sweep: none to use only the bus watch")
+        p.add_argument("--camera", default="0", help="camera number or stream address, or 'none' for a sweep with no camera (sweep: the bus watch and windows.csv for sweep_crosscheck.py still work)")
         p.add_argument("--width", type=int)
         p.add_argument("--height", type=int)
         p.add_argument("--backend", choices=list(BACKENDS), default="auto",
