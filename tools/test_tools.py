@@ -4,6 +4,7 @@ import argparse
 import unittest
 
 import can_listen
+import can_wake
 import j1587
 import j1708_listen
 import j1939
@@ -59,10 +60,34 @@ class J1587Test(unittest.TestCase):
                                                                bytes.fromhex("8c fc 03 74 0a 29 ce"), short])
         self.assertIn("data link escape to MID 128 [d4 80 69 80]", j1587.describe(short))
         self.assertIn("to MID 127", j1587.describe(long))
+        self.assertIn("SID 201 Data link, vehicle ECU (MID 144) FMI 12 device lost (active, x1)",
+                      j1587.describe(long))
+
+    def test_diag_codes(self):
+        # The cluster's own list, joined from its two PID 192 sections.
+        codes = j1587.decode_diag_codes(bytes.fromhex("75 a4 03 ab a5 03 54 a9 03 76 a4 03 b1 a9 03 60 a5 03 4d a5 03"))
+        self.assertEqual(len(codes), 7)
+        self.assertEqual(codes[0], "PID 117 Air pressure primary FMI 4 shorted low (active, x3)")
+        self.assertEqual(codes[2], "PID 84 Road speed FMI 9 abnormal update rate (active, x3)")
+        self.assertEqual(j1587.decode_diag_codes(bytes([22, 0x89, 3])),
+                         ["PID 278 FMI 9 abnormal update rate (active, x3)"])
+        self.assertEqual(j1587.decode_diag_codes(bytes([200, 0xF9])),
+                         ["SID 200 Data link, engine ECU (MID 128) FMI 9 abnormal update rate (inactive)"])
 
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
+
+
+class WakeTest(unittest.TestCase):
+    def test_heartbeats(self):
+        frames = {name: msg for name, _, msg in can_wake.heartbeats(0x27, 1000, 50, 13.8)}
+        self.assertEqual(frames["EEC1"].arbitration_id, 0x0CF00400)
+        self.assertEqual(bytes(frames["EEC1"].data[3:5]), b"\x40\x1f")
+        self.assertEqual(frames["CCVS1"].arbitration_id, 0x18FEF127)
+        self.assertEqual(bytes(frames["CCVS1"].data[:3]), b"\xf3\x00\x32")
+        self.assertEqual(bytes(frames["VEP1"].data[4:]), b"\x14\x01\x14\x01")
+        self.assertEqual(frames["VEP1"].arbitration_id, 0x18FEF727)
 
 
 class SendArgTest(unittest.TestCase):
