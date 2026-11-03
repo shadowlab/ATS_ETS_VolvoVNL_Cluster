@@ -6,7 +6,9 @@ Starts with the key off (nothing sent) for --off seconds, then sends all the
 frames below together, at their usual J1939 rates. With several --vecu
 addresses it tries each for --dwell seconds and loops, so one run with
 j1708_listen.py logging alongside shows which address clears the cluster's
-SID 201 (VECU lost). Only one program can open the CANable, which is why this
+SID 201 (VECU lost). --vecu sweep tries every address, 16 at a time
+(--group), so a hit narrows the search to one group; then try that group's
+range in halves, e.g. --vecu 41-48,49-50. Only one program can open the CANable, which is why this
 sends everything from one place, in one loop that also reads (and so drains)
 the adapter. A status line every --status seconds shows frames sent, send
 errors and frames heard from the cluster. Ctrl+C stops.
@@ -27,17 +29,57 @@ from can_send import build_message
 CLUSTER_SA = 0x17
 
 
+# Never sweep the engine (00, sent separately), the cluster itself, or the null/global addresses.
+SKIP_SA = {0x00, CLUSTER_SA, 0xFE, 0xFF}
+
+
+def parse_vecu(text, group=16):
+    """--vecu into a list of turns, each a list of source addresses sent together.
+
+    "27,21,31" is three turns of one address. "01-3F" is one turn with every
+    address in that range. "sweep" is 01-FD in groups of `group`.
+    """
+    turns = []
+    for item in text.replace(" ", "").split(","):
+        if item.lower() == "sweep":
+            pool = [sa for sa in range(0x01, 0xFE) if sa not in SKIP_SA]
+            turns += [pool[i:i + group] for i in range(0, len(pool), group)]
+        elif "-" in item:
+            lo, hi = (int(x, 16) for x in item.split("-"))
+            turns.append([sa for sa in range(lo, hi + 1) if sa not in SKIP_SA])
+        else:
+            turns.append([int(item, 16)])
+    if not all(turns):
+        raise ValueError(f"no usable address in --vecu {text!r}")
+    return turns
+
+
+def describe_turn(sas):
+    if len(sas) == 1:
+        return f"SA 0x{sas[0]:02X}"
+    return f"{len(sas)} SAs 0x{sas[0]:02X}-0x{sas[-1]:02X}"
+
+
 def heartbeats(vecu, rpm, kmh, volts):
-    """(name, period in s, message) for every frame of one simulated truck."""
+    """(name, period in s, message) for every frame of one simulated truck.
+
+    vecu is one source address or a list of them; the VECU frames go out from each.
+    """
+    vecus = [vecu] if isinstance(vecu, int) else list(vecu)
     rpm_raw = round(rpm / 0.125)
     speed_raw = round(kmh * 256)
     volts_raw = round(volts / 0.05)
     v = volts_raw.to_bytes(2, "little")
-    return [
-        # VEP1: battery potential (SPN 168) and keyswitch potential (SPN 158).
-        ("VEP1", 0.1, build_message(0xFEF7, vecu, bytes([0xFF] * 4) + v + v)),
-        # CCVS1: parking brake released (SPN 70 = 00), wheel-based speed.
-        ("CCVS1", 0.1, build_message(0xFEF1, vecu, bytes([0xF3]) + speed_raw.to_bytes(2, "little"))),
+    tag = (lambda sa: "") if len(vecus) == 1 else (lambda sa: f" {sa:02X}")
+    vecu_frames = []
+    for sa in vecus:
+        vecu_frames += [
+            # VEP1: battery potential (SPN 168) and keyswitch potential (SPN 158).
+            ("VEP1" + tag(sa), 0.1, build_message(0xFEF7, sa, bytes([0xFF] * 4) + v + v)),
+            # CCVS1: parking brake released (SPN 70 = 00), wheel-based speed.
+            ("CCVS1" + tag(sa), 0.1, build_message(0xFEF1, sa, bytes([0xF3]) + speed_raw.to_bytes(2, "little"))),
+        ]
+    return vecu_frames + [
         # EEC1 with real-looking torque fields, as an engine sends it.
         ("EEC1", 0.02, build_message(0xF004, 0x00, bytes([0xF0, 0x7D, 0x83]) + rpm_raw.to_bytes(2, "little")
                                      + bytes([0x00, 0xF0, 0x7D]), priority=3)),
@@ -83,7 +125,10 @@ class Scheduler:
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     canbus.add_bus_args(ap)
-    ap.add_argument("--vecu", default="27", help="VECU source address(es) in hex, comma separated (default 27)")
+    ap.add_argument("--vecu", default="27",
+                    help="VECU source addresses in hex, comma separated, tried in turn (default 27). "
+                         "A range like 01-0F sends from all of them at once; 'sweep' covers 01-FD in groups")
+    ap.add_argument("--group", type=int, default=16, help="addresses per turn for --vecu sweep (default 16)")
     ap.add_argument("--dwell", type=float, default=30, help="seconds per VECU address when several are given")
     ap.add_argument("--off", type=float, default=2, help="seconds of silence before key-on")
     ap.add_argument("--rpm", type=float, default=0)
@@ -91,7 +136,12 @@ def main():
     ap.add_argument("--volts", type=float, default=13.8)
     ap.add_argument("--status", type=float, default=5, help="seconds between status lines (default 5)")
     args = ap.parse_args()
-    addresses = [int(a, 16) for a in args.vecu.split(",")]
+    try:
+        turns = parse_vecu(args.vecu, args.group)
+    except ValueError as exc:
+        ap.error(str(exc))
+    if len(turns) > 1:
+        print(f"{len(turns)} turns of {args.dwell:g} s, about {len(turns) * args.dwell / 60:.0f} min per pass")
 
     bus = canbus.open_bus(args)
     sent = errors = heard = 0
@@ -107,17 +157,21 @@ def main():
             now = time.monotonic()
             if now >= next_switch:
                 turn += 1
-                vecu = addresses[turn % len(addresses)]
-                frames = heartbeats(vecu, args.rpm, args.kmh, args.volts)
-                print(time.strftime("%H:%M:%S"), f"key on, VECU at SA 0x{vecu:02X}")
+                vecus = turns[turn % len(turns)]
+                frames = heartbeats(vecus, args.rpm, args.kmh, args.volts)
+                print(time.strftime("%H:%M:%S"), f"turn {turn % len(turns) + 1}/{len(turns)}: VECU at {describe_turn(vecus)}")
                 for name, period, msg in frames:
+                    if len(vecus) > 1 and name[:4] in ("VEP1", "CCVS"):
+                        continue
                     print(f"  {name:7} every {period * 1000:g} ms  {msg.arbitration_id:08X}  {bytes(msg.data).hex(' ')}"
                           f"  {j1939.describe(msg.arbitration_id, bytes(msg.data))}")
                 if sched is None:
                     sched = Scheduler(frames, now)
                 else:
                     sched.swap(frames, now)
-                next_switch = now + args.dwell if len(addresses) > 1 else float("inf")
+                if len(vecus) > 1:
+                    print(f"  VEP1 and CCVS1 every 100 ms from each of {' '.join(f'{sa:02X}' for sa in vecus)}")
+                next_switch = now + args.dwell if len(turns) > 1 else float("inf")
             for msg in sched.due(now):
                 try:
                     bus.send(msg)
