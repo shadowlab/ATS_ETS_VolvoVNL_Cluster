@@ -644,7 +644,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def camera_args(p):
-        p.add_argument("--camera", default="0", help="camera number or stream address, or "none" for a sweep with no camera (sweep only)")
+        p.add_argument("--camera", default="0", help="camera number or stream address, or 'none' for a sweep with no camera (sweep only)")
         p.add_argument("--width", type=int)
         p.add_argument("--height", type=int)
         p.add_argument("--backend", choices=list(BACKENDS), default="auto",
