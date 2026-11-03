@@ -325,7 +325,7 @@ If the cluster needs to hear an engine to stay awake, add
 `--background F004:00:FFFFFF401FFFFFFF` (repeatable, CAN only) to keep
 sending a frame through the whole run.
 
-`--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
+The engine heartbeat is now on by default for CAN sweeps (`--no-wake` turns it off) and starts 5 s before the first candidate, since the cluster ignores other frames until it hears an engine. For a J1708 sweep add `--wake --interface gs_usb --channel 0` and the CANable sends it while the serial port sweeps. `--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
 frames that bring the tach, oil, coolant and check-engine lamp to life,
 2026-11-03), so a sweep can look for gauges that only work with the engine
 "running", like the speedometer. Fill with a mid-range byte rather than 00/FF,

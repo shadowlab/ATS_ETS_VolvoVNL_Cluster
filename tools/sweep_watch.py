@@ -880,11 +880,16 @@ def cmd_preview(args):
 
 
 def cmd_sweep(args):
+    if args.transport != "j1708":
+        args.wake = not args.no_wake  # the cluster ignores sweep frames unless an engine is being heard first
     if args.transport == "j1708":
         if not args.port:
             raise SystemExit("--transport j1708 needs --port, the ESP32 bridge's COM port")
-        if args.bits or args.background or args.wake:
-            raise SystemExit("--bits, --background and --wake only work on CAN")
+        if args.bits or args.background:
+            raise SystemExit("--bits and --background only work on CAN")
+        if args.wake and not args.channel:
+            raise SystemExit("--wake on a J1708 sweep also needs --interface and --channel for the CAN adapter "
+                             "that sends the engine heartbeat")
         cands = j1708_candidates(parse_hex_list(args.mids), parse_hex_list(args.pids), parse_hex_list(args.fills))
     else:
         if not args.channel or not (args.pgns or args.check_only):
@@ -895,7 +900,7 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = port = transport = reader = None
+    bus = port = transport = reader = wake_sender = None
     background = []
     watch = None if args.no_bus_watch else BusWatch()
     if args.transport == "j1708":
@@ -903,6 +908,10 @@ def cmd_sweep(args):
 
         port = serial.Serial(args.port, args.baud, timeout=0)
         transport = J1708Transport(port)
+        if args.wake:
+            bus = canbus.open_bus(args)
+            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8))
+            print(f"Running the can_wake engine heartbeat on CAN ({args.wake_rpm:g} rpm) before the J1708 sweep starts")
         if watch:
             reader = J1708Reader(port, watch)
     else:
@@ -931,8 +940,8 @@ def cmd_sweep(args):
         camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
         detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
-        if background:
-            time.sleep(2)
+        if background or wake_sender:
+            time.sleep(5 if args.wake else 2)  # let the cluster hear the engine before the first candidate
         if watch:
             print(f"Learning the cluster's normal output for {args.learn:g} s...")
             watch.learn(args.learn)
@@ -959,6 +968,8 @@ def cmd_sweep(args):
             reader.close()
         if isinstance(transport, CanTransport):
             transport.sender.close()
+        if wake_sender:
+            wake_sender.close()
         camera.close()
         if bus:
             canbus.close_bus(bus)
@@ -1013,7 +1024,10 @@ def main():
     sw.add_argument("--check-rpm", type=float, default=2000, help="engine speed for --check (default 2000)")
     sw.add_argument("--check-seconds", type=float, help="how long --check sends (default 6 with --wake, else 20)")
     sw.add_argument("--wake", action="store_true",
-                    help="CAN: run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time")
+                    help="run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time, "
+                         "started before the first candidate. On by default for CAN sweeps. For a J1708 sweep "
+                         "add --wake with --interface/--channel and the CANable sends it")
+    sw.add_argument("--no-wake", action="store_true", help="CAN sweep: leave the engine heartbeat off")
     sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")
     sw.add_argument("--wake-vecu", default="27", help="source address for --wake's VEP1/CCVS1 (default 27)")
     sw.add_argument("--dwell", type=float, default=1.0, help="seconds to send each candidate")
