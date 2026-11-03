@@ -1,13 +1,15 @@
 """Play a simulated truck to the cluster: key-on, then engine and VECU heartbeats.
 
-    python can_wake.py --channel COM5 --vecu 27,21,31 --dwell 30 --rpm 1000 --kmh 50
+    python can_wake.py --interface gs_usb --channel 0 --vecu 27,21,31 --dwell 30 --rpm 1000 --kmh 50
 
 Starts with the key off (nothing sent) for --off seconds, then sends all the
 frames below together, at their usual J1939 rates. With several --vecu
 addresses it tries each for --dwell seconds and loops, so one run with
 j1708_listen.py logging alongside shows which address clears the cluster's
 SID 201 (VECU lost). Only one program can open the CANable, which is why this
-sends everything from one place. Ctrl+C stops.
+sends everything from one place, in one loop that also reads (and so drains)
+the adapter. A status line every --status seconds shows frames sent, send
+errors and frames heard from the cluster. Ctrl+C stops.
 
 Which frames the cluster needs is not known yet; this is a test, see
 docs/messages.md.
@@ -16,9 +18,13 @@ docs/messages.md.
 import argparse
 import time
 
+import can
+
 import canbus
 import j1939
 from can_send import build_message
+
+CLUSTER_SA = 0x17
 
 
 def heartbeats(vecu, rpm, kmh, volts):
@@ -44,6 +50,36 @@ def heartbeats(vecu, rpm, kmh, volts):
     ]
 
 
+class Scheduler:
+    """Sends a set of periodic frames from one loop, with no background threads.
+
+    Swapping the frame set (a new VECU address) keeps each frame's timing, so
+    the engine frames never pause.
+    """
+
+    def __init__(self, frames, now):
+        self.entries = []
+        self.swap(frames, now)
+
+    def swap(self, frames, now):
+        due = {name: next_time for name, next_time, _, _ in self.entries}
+        self.entries = [[name, due.get(name, now), period, msg] for name, period, msg in frames]
+
+    def due(self, now):
+        """Frames to send now. A frame that fell behind skips ahead instead of bursting."""
+        out = []
+        for entry in self.entries:
+            if now >= entry[1]:
+                out.append(entry[3])
+                entry[1] += entry[2]
+                if entry[1] <= now:
+                    entry[1] = now + entry[2]
+        return out
+
+    def wait(self, now):
+        return max(0.0, min(entry[1] for entry in self.entries) - now)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     canbus.add_bus_args(ap)
@@ -53,25 +89,60 @@ def main():
     ap.add_argument("--rpm", type=float, default=0)
     ap.add_argument("--kmh", type=float, default=0)
     ap.add_argument("--volts", type=float, default=13.8)
+    ap.add_argument("--status", type=float, default=5, help="seconds between status lines (default 5)")
     args = ap.parse_args()
     addresses = [int(a, 16) for a in args.vecu.split(",")]
 
     bus = canbus.open_bus(args)
+    sent = errors = heard = 0
+    last_error = ""
     try:
         time.sleep(args.off)
+        now = time.monotonic()
+        sched = None
+        turn = -1
+        next_switch = now
+        next_status = now + args.status
         while True:
-            for vecu in addresses:
+            now = time.monotonic()
+            if now >= next_switch:
+                turn += 1
+                vecu = addresses[turn % len(addresses)]
                 frames = heartbeats(vecu, args.rpm, args.kmh, args.volts)
                 print(time.strftime("%H:%M:%S"), f"key on, VECU at SA 0x{vecu:02X}")
                 for name, period, msg in frames:
                     print(f"  {name:7} every {period * 1000:g} ms  {msg.arbitration_id:08X}  {bytes(msg.data).hex(' ')}"
                           f"  {j1939.describe(msg.arbitration_id, bytes(msg.data))}")
-                tasks = [bus.send_periodic(msg, period) for _, period, msg in frames]
+                if sched is None:
+                    sched = Scheduler(frames, now)
+                else:
+                    sched.swap(frames, now)
+                next_switch = now + args.dwell if len(addresses) > 1 else float("inf")
+            for msg in sched.due(now):
                 try:
-                    time.sleep(args.dwell if len(addresses) > 1 else 1e9)
-                finally:
-                    for task in tasks:
-                        task.stop()
+                    bus.send(msg)
+                    sent += 1
+                except can.CanError as exc:
+                    errors += 1
+                    last_error = str(exc)
+            if now >= next_status:
+                print(time.strftime("%H:%M:%S"), f"  sent {sent}, send errors {errors}, cluster frames heard {heard}"
+                      + (f"  (last error: {last_error})" if last_error else ""))
+                if heard == 0:
+                    print("  WARNING: nothing heard from the cluster; is it powered? Replug the CANable if this stays")
+                sent = errors = heard = 0
+                last_error = ""
+                next_status = now + args.status
+            # Read everything waiting, including the adapter's echoes of our own frames:
+            # a candleLight adapter whose echoes are never read runs out of buffers and stops sending.
+            # Reading also does the waiting until the next frame is due.
+            msg = bus.recv(timeout=max(0.001, min(sched.wait(time.monotonic()), 0.05)))
+            for _ in range(200):
+                if msg is None:
+                    break
+                if msg.is_rx and not msg.is_error_frame and msg.arbitration_id & 0xFF == CLUSTER_SA:
+                    heard += 1
+                msg = bus.recv(timeout=0.001)
     except KeyboardInterrupt:
         pass
     finally:

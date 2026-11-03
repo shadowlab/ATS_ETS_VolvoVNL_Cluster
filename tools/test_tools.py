@@ -89,6 +89,34 @@ class WakeTest(unittest.TestCase):
         self.assertEqual(bytes(frames["VEP1"].data[4:]), b"\x14\x01\x14\x01")
         self.assertEqual(frames["VEP1"].arbitration_id, 0x18FEF727)
 
+    def test_scheduler_rates(self):
+        sched = can_wake.Scheduler(can_wake.heartbeats(0x27, 1000, 50, 13.8), 0.0)
+        counts = {}
+        t = 0.0
+        while t < 10.0:
+            for msg in sched.due(t):
+                counts[msg.arbitration_id] = counts.get(msg.arbitration_id, 0) + 1
+            t += 0.001
+        self.assertAlmostEqual(counts[0x0CF00400], 500, delta=2)   # EEC1, 20 ms
+        self.assertAlmostEqual(counts[0x18FEF727], 100, delta=2)   # VEP1, 100 ms
+        self.assertAlmostEqual(counts[0x18FEEE00], 10, delta=1)    # ET1, 1 s
+
+    def test_scheduler_swap_keeps_engine_going(self):
+        sched = can_wake.Scheduler(can_wake.heartbeats(0x27, 1000, 50, 13.8), 0.0)
+        sched.due(0.0)
+        sched.swap(can_wake.heartbeats(0x21, 1000, 50, 13.8), 0.005)
+        self.assertEqual(sched.due(0.005), [])      # nothing re-sent early
+        ids = [m.arbitration_id for m in sched.due(0.02)]
+        self.assertIn(0x0CF00400, ids)               # EEC1 still on its 20 ms beat
+        ids = [m.arbitration_id for m in sched.due(0.1)]
+        self.assertIn(0x18FEF721, ids)               # VEP1 now from 0x21
+
+    def test_scheduler_skips_ahead_after_stall(self):
+        sched = can_wake.Scheduler(can_wake.heartbeats(0x27, 1000, 50, 13.8), 0.0)
+        sched.due(0.0)
+        burst = [m for m in sched.due(1.0) if m.arbitration_id == 0x0CF00400]
+        self.assertEqual(len(burst), 1)
+
 
 class SendArgTest(unittest.TestCase):
     def test_parse_send_adds_checksum(self):
