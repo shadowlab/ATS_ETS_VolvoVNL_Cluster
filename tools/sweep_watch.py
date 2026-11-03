@@ -55,8 +55,8 @@ import canbus
 import j1587
 import j1939
 
-HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after"]
-TRIED_FIELDS = ["time", "sa", "pgn", "payload", "change", "hit"]
+HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after", "bus"]
+TRIED_FIELDS = ["time", "sa", "pgn", "payload", "change", "hit", "bus"]
 
 
 def parse_hex_list(text):
@@ -354,8 +354,11 @@ def wait_idle(camera, detector, timeout):
 
 def append_row(path, fields, row):
     new = not os.path.exists(path)
+    if not new:
+        with open(path, newline="") as f:
+            fields = next(csv.reader(f), None) or fields   # a run folder from an older version keeps its columns
     with open(path, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=fields)
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         if new:
             w.writeheader()
         w.writerow(row)
@@ -368,16 +371,154 @@ def read_rows(path):
         return list(csv.DictReader(f))
 
 
-def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
-              period=0.1, priority=6, log=print, transport=None):
-    """Send each candidate and record the ones that change the picture.
+class BusWatch:
+    """Notices when the cluster's own output changes, as a second way to spot a hit.
 
-    bus is the CAN bus, or None when a transport is given."""
+    Feed it every frame the cluster sends (CAN from SA 17 through can_wake's
+    CanSender, J1708 through J1708Reader). Each output is keyed by what it is
+    (a PGN, or a MID/PID pair) and remembered by its latest data. learn() finds
+    the outputs that change by themselves (clock, counters) and ignores them.
+    """
+
+    def __init__(self, noisy_after=3):
+        self.lock = threading.Lock()
+        self.latest = {}
+        self.window = None          # outputs as they were at mark()
+        self.window_changes = {}    # first value that differed from the mark, per output
+        self.noisy = set()
+        self.trigger_counts = {}
+        self.noisy_after = noisy_after
+
+    def observe(self, key, data):
+        data = bytes(data)
+        with self.lock:
+            if self.window is not None and key not in self.window_changes and self.window.get(key) != data:
+                self.window_changes[key] = data
+            self.latest[key] = data
+
+    def observe_can(self, msg):
+        _, pgn, sa, _ = j1939.parse_id(msg.arbitration_id)
+        if sa == can_wake.CLUSTER_SA:
+            self.observe(("CAN", pgn), msg.data)
+
+    def observe_j1708(self, frame):
+        mid, body = frame[0], frame[1:-1]
+        if not body:
+            return
+        pid = body[0]
+        # PID 254 frames are addressed: key them by destination. PID 192 multisection frames by section.
+        sub = None
+        if pid == 254 and len(body) > 1:
+            sub = body[1]
+        elif pid == 192 and len(body) > 2:
+            sub = body[2]
+        self.observe(("J1708", mid, pid, sub), body)
+
+    def mark(self):
+        """Start a window: changes() then lists every output that differed at any point since."""
+        with self.lock:
+            self.window = dict(self.latest)
+            self.window_changes = {}
+            return self.window
+
+    def changes(self, snapshot=None):
+        """Outputs that changed (or appeared) since mark(), leaving out the noisy ones."""
+        with self.lock:
+            return sorted((k for k in self.window_changes if k not in self.noisy), key=str)
+
+    def learn(self, seconds, log=print):
+        """Watch for `seconds` with nothing extra sent; whatever changes is noise."""
+        end = time.time() + seconds
+        before = self.mark()
+        while time.time() < end:
+            time.sleep(0.1)
+            with self.lock:
+                # changed after we first saw it (a key that only just appeared isn't noise yet)
+                self.noisy |= {k for k in self.window_changes if k in before}
+            before = self.mark()
+        log(f"bus watch: {len(self.latest)} cluster outputs seen, ignoring {len(self.noisy)} that change by themselves"
+            + (f": {', '.join(describe_key(k) for k in sorted(self.noisy, key=str))}" if self.noisy else ""))
+
+    def blame(self, keys, log=print):
+        """Count hits per output; one that keeps triggering is noise after all."""
+        for k in keys:
+            self.trigger_counts[k] = self.trigger_counts.get(k, 0) + 1
+            if self.trigger_counts[k] >= self.noisy_after and k not in self.noisy:
+                with self.lock:
+                    self.noisy.add(k)
+                log(f"  bus watch: {describe_key(k)} keeps changing, ignoring it from now on")
+
+
+def describe_key(k):
+    if k[0] == "CAN":
+        name = j1939.pgn_name(k[1])
+        return f"CAN PGN {k[1]:05X}" + (f" {name}" if name else "")
+    _, mid, pid, sub = k
+    return f"J1708 MID {mid} PID {pid}" + (f"/{sub}" if sub is not None else "")
+
+
+def describe_changes(watch, keys, snapshot):
+    parts = []
+    for k in keys:
+        old = snapshot.get(k)
+        new = watch.window_changes.get(k, b"")
+        parts.append(f"{describe_key(k)}: {old.hex(' ') if old is not None else 'new'} -> {new.hex(' ')}")
+    return "; ".join(parts)
+
+
+class J1708Reader:
+    """Reads the cluster's J1708 output from the ESP32 bridge into a BusWatch."""
+
+    def __init__(self, port, watch, gap=0.004):
+        self.port = port
+        self.watch = watch
+        self.gap = gap
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        chunk = bytearray()
+        last = time.time()
+        while self.running:
+            data = self.port.read(256)
+            if data:
+                chunk += data
+                last = time.time()
+                continue
+            if chunk and time.time() - last >= self.gap:
+                for frame in j1587.split_frames(bytes(chunk)) or []:
+                    self.watch.observe_j1708(frame)
+                chunk.clear()
+            time.sleep(0.001)
+
+    def close(self):
+        self.running = False
+        self.thread.join(timeout=1)
+
+
+class NullCamera:
+    """Stands in for the camera when a sweep relies on the bus watch alone."""
+
+    def frame(self, timeout=2.0):
+        time.sleep(0.05)
+        return np.zeros((8, 8, 3), np.uint8)
+
+    def close(self):
+        pass
+
+
+def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
+              period=0.1, priority=6, log=print, transport=None, watch=None):
+    """Send each candidate and record the ones that change the picture or the cluster's output.
+
+    bus is the CAN bus, or None when a transport is given. watch is an
+    optional BusWatch; camera may be a NullCamera to rely on it alone."""
     if transport is None:
         transport = CanTransport(bus, priority)
         try:
             return run_sweep(bus, camera, detector, cands, out_dir, dwell, settle, recover, period, priority, log,
-                             transport)
+                             transport, watch)
         finally:
             transport.close()
     img_dir = os.path.join(out_dir, "img")
@@ -401,6 +542,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
             idle = camera.frame()
         detector.adapt(idle)
 
+        snapshot = watch.mark() if watch else None
         task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
@@ -416,25 +558,40 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         if task:
             task.stop()
 
-        hit = best >= detector.min_area
+        camera_hit = best >= detector.min_area
+        changed = watch.changes(snapshot) if watch else []
+        bus_text = describe_changes(watch, changed, snapshot) if changed else ""
+        hit = camera_hit or bool(changed)
         now = datetime.now().isoformat(timespec="seconds")
         if hit:
             hit_count += 1
-            latched = not wait_idle(camera, detector, recover)
-            if latched:
-                rebaseline(camera, detector)
+            if changed:
+                watch.blame(changed, log)
+            if camera_hit:
+                latched = not wait_idle(camera, detector, recover)
+                if latched:
+                    rebaseline(camera, detector)
+            else:
+                latched = False
+                time.sleep(recover)   # let the cluster's output settle back before the next candidate
             stem = f"hit_{hit_count:04d}_{sa:02X}_{pgn:05X}_{payload.hex()}"
-            cv2.imwrite(os.path.join(img_dir, stem + "_before.jpg"), idle)
-            cv2.imwrite(os.path.join(img_dir, stem + "_after.jpg"), annotate(best_frame, best_mask, detector.ignore))
+            if not isinstance(camera, NullCamera):
+                cv2.imwrite(os.path.join(img_dir, stem + "_before.jpg"), idle)
+                frame = best_frame if best_frame is not None else idle
+                mask = best_mask if best_mask is not None else np.zeros(idle.shape[:2], np.uint8)
+                cv2.imwrite(os.path.join(img_dir, stem + "_after.jpg"), annotate(frame, mask, detector.ignore))
             append_row(hits_path, HIT_FIELDS, {
                 "hit": hit_count, "time": now, "sa": f"{sa:02X}", "pgn": f"{pgn:05X}", "name": transport.name(pgn),
                 "payload": payload.hex(" "), "change": f"{best:.4f}", "latched": "yes" if latched else "",
-                "before": f"img/{stem}_before.jpg", "after": f"img/{stem}_after.jpg"})
+                "before": f"img/{stem}_before.jpg", "after": f"img/{stem}_after.jpg", "bus": bus_text})
             write_review(out_dir, transport.labels)
             log(f"HIT {hit_count}: {transport.labels[0]} {sa:02X} {transport.labels[1]} {pgn:05X} {payload.hex(' ')}  change {best:.2%}"
                 + ("  (stayed on, new baseline taken)" if latched else ""))
+            if bus_text:
+                log(f"  bus: {bus_text}")
         append_row(tried_path, TRIED_FIELDS, {"time": now, "sa": f"{sa:02X}", "pgn": f"{pgn:05X}",
-                                              "payload": payload.hex(), "change": f"{best:.4f}", "hit": int(hit)})
+                                              "payload": payload.hex(), "change": f"{best:.4f}", "hit": int(hit),
+                                              "bus": bus_text})
         if (i + 1) % 25 == 0 or i + 1 == len(todo):
             rate = (time.time() - start) / (i + 1)
             log(f"  {i + 1}/{len(todo)}  hits {hit_count}  about {(len(todo) - i - 1) * rate / 60:.0f} min left")
@@ -496,7 +653,8 @@ def write_review(out_dir, labels=("SA", "PGN")):
             f'<tr data-hit="{e["hit"]}" data-sa="{e["sa"]}" data-pgn="{e["pgn"]}" data-payload="{e["payload"]}">'
             f'<td>{e["hit"]}</td>'
             f'<td><code>{labels[0]} {e["sa"]}<br>{labels[1]} {e["pgn"]} {e["name"]}<br>{e["payload"]}</code>'
-            f'<br>change {float(r["change"]):.2%}{"<br>stayed on" if r["latched"] else ""}<br>{e["time"]}</td>'
+            f'<br>change {float(r["change"]):.2%}{"<br>stayed on" if r["latched"] else ""}<br>{e["time"]}'
+            f'{"<br><b>bus:</b> " + e.get("bus", "") if e.get("bus") else ""}</td>'
             f'<td><img src="{e["before"]}" loading="lazy"></td><td><img src="{e["after"]}" loading="lazy"></td>'
             f'<td><button onclick="mark(\'{e["hit"]}\',\'ok\')">Confirm</button> '
             f'<button onclick="mark(\'{e["hit"]}\',\'no\')">Ignore</button><br>'
@@ -598,13 +756,18 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = port = transport = None
+    bus = port = transport = reader = None
     background = []
+    watch = None if args.no_bus_watch else BusWatch()
+    if args.camera == "none" and not watch:
+        raise SystemExit("--camera none needs the bus watch; leave out --no-bus-watch")
     if args.transport == "j1708":
         import serial
 
         port = serial.Serial(args.port, args.baud, timeout=0)
         transport = J1708Transport(port)
+        if watch:
+            reader = J1708Reader(port, watch)
     else:
         bus = canbus.open_bus(args)
         for spec in args.background:
@@ -616,19 +779,35 @@ def cmd_sweep(args):
         if args.wake:
             background += can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8)
             print(f"Running the can_wake engine heartbeat underneath ({args.wake_rpm:g} rpm)")
-        transport = CanTransport(bus, sender=can_wake.CanSender(bus, background))
-    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
-    detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
+        transport = CanTransport(bus, sender=can_wake.CanSender(bus, background,
+                                                                on_rx=watch.observe_can if watch else None))
+        if watch and args.j1708_port:
+            import serial
+
+            port = serial.Serial(args.j1708_port, args.baud, timeout=0)
+            reader = J1708Reader(port, watch)
+    if args.camera == "none":
+        camera, detector = NullCamera(), ChangeDetector()
+    else:
+        camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
+        detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
         if background:
             time.sleep(2)
+        if watch:
+            print(f"Learning the cluster's normal output for {args.learn:g} s...")
+            watch.learn(args.learn)
+            if not watch.latest:
+                print("WARNING: heard nothing from the cluster; the bus watch can't find hits")
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
-                         transport=transport)
+                         transport=transport, watch=watch)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
     except KeyboardInterrupt:
         write_review(out_dir, transport.labels)
         print(f"Stopped. Run the same command with --out {out_dir} to resume.")
     finally:
+        if reader:
+            reader.close()
         if isinstance(transport, CanTransport):
             transport.sender.close()
         camera.close()
@@ -643,7 +822,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def camera_args(p):
-        p.add_argument("--camera", default="0", help="camera number or stream address")
+        p.add_argument("--camera", default="0", help="camera number or stream address; sweep: none to use only the bus watch")
         p.add_argument("--width", type=int)
         p.add_argument("--height", type=int)
         p.add_argument("--backend", choices=list(BACKENDS), default="auto",
@@ -674,6 +853,11 @@ def main():
     sw.add_argument("--bits", action="store_true", help="flip one bit at a time from the first payload")
     sw.add_argument("--background", action="append", default=[], metavar="PGN:SA:DATA",
                     help="also send this every 100 ms for the whole run, e.g. F004:00:FFFFFF401FFFFFFF")
+    sw.add_argument("--no-bus-watch", action="store_true",
+                    help="don't count changes in the cluster's own CAN/J1708 output as hits")
+    sw.add_argument("--j1708-port", help="CAN sweep: also watch the cluster's J1708 output on this bridge port")
+    sw.add_argument("--learn", type=float, default=30,
+                    help="seconds to watch the cluster's output before the sweep, to learn what changes by itself")
     sw.add_argument("--wake", action="store_true",
                     help="CAN: run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time")
     sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")

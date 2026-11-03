@@ -132,8 +132,9 @@ class CanSender:
     and removed while it runs.
     """
 
-    def __init__(self, bus, frames=()):
+    def __init__(self, bus, frames=(), on_rx=None):
         self.bus = bus
+        self.on_rx = on_rx
         self.frames = {name: (period, msg) for name, period, msg in frames}
         self.lock = threading.Lock()
         self.sched = Scheduler(self._list(), time.monotonic())
@@ -176,8 +177,11 @@ class CanSender:
                 for _ in range(200):
                     if msg is None:
                         break
-                    if msg.is_rx and not msg.is_error_frame and msg.arbitration_id & 0xFF == CLUSTER_SA:
-                        self.heard += 1
+                    if msg.is_rx and not msg.is_error_frame:
+                        if msg.arbitration_id & 0xFF == CLUSTER_SA:
+                            self.heard += 1
+                        if self.on_rx:
+                            self.on_rx(msg)
                     msg = self.bus.recv(timeout=0.001)
             except Exception:
                 if not self.running:

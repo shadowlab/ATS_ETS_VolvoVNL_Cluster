@@ -334,6 +334,23 @@ which read as zero or "not available" for most gauges:
 python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --pgns FF00-FFFF --sources 27,00 --payloads 40
 ```
 
+**Bus watch.** Besides the camera, a sweep watches what the cluster itself
+sends: its CAN frames (SA 17) always, and its J1708 output too with
+`--j1708-port COM11` (close j1708_listen first; the port can only be open
+once). Before the sweep it listens for `--learn` seconds (default 30) and
+ignores whatever changes on its own, like the clock. After that, any cluster
+output that changes or appears while a candidate is sent counts as a hit:
+a fault code clearing, the odometer (FEC1, PID 245) starting to count, a new
+PGN. The hit's `bus` column (and review.html) says what changed. An output
+that triggers three hits is treated as noise from then on. `--camera none`
+sweeps on the bus watch alone; `--no-bus-watch` turns it off. Use
+`--dwell 2` or more so slow outputs (the fault list repeats about every
+1.1 s) get a chance to change:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j1708-port COM11 --pgns FF00-FFFF --sources 27,00 --payloads 40 --dwell 2
+```
+
 Each run gets a folder under `sweeps/`. Open its `review.html` to see every
 hit with before and after pictures, mark it confirmed or ignored, add a
 note, and export the marks to CSV. Stop with Ctrl+C at any time, and rerun
