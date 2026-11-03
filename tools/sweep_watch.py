@@ -1,6 +1,6 @@
-"""Sweep J1939 PGNs while a camera watches the cluster, and log what changes.
+"""Sweep J1939 PGNs or J1587 PIDs while a camera watches the cluster, and log what changes.
 
-Each candidate (source address, PGN, payload) is sent for --dwell seconds,
+Each candidate (source address, PGN, payload; or MID, PID, data) is sent for --dwell seconds,
 then watched for --settle seconds more. If the picture differs from the idle
 baseline, the script saves before and after pictures and logs the hit, waits
 for the cluster to return to idle, and moves on. Hits go to a run folder:
@@ -19,12 +19,19 @@ Enter after each, then Esc when done:
 Check the detector with a live view, then sweep the Volvo proprietary range:
 
     python sweep_watch.py preview --camera 0
-    python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF00-FFFF --sources 00,03,0B,21,31,17 --payloads 00,FF
+    python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF00-FFFF --sources 00,03,0B,21,31,17 --payloads 00,FF
 
 Narrow a hit down bit by bit (64 candidates, each with one bit flipped from
 the first payload):
 
-    python sweep_watch.py sweep --channel COM5 --camera 0 --pgns FF23 --sources 21 --payloads 00 --bits
+    python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF23 --sources 21 --payloads 00 --bits
+
+--transport j1708 sweeps J1587 instead: each MID (--mids) sends each PID
+(--pids) filled with each byte (--fills), through the ESP32 bridge on --port.
+The data is one byte below PID 128, two bytes up to 191, and a length of 2
+plus two bytes above that. PIDs 254 and 255 are skipped.
+
+    python sweep_watch.py sweep --transport j1708 --port COM11 --camera 0 --mids 80,90 --pids 00-FD --fills 00,FF
 
 --camera is a camera number (DroidCam over USB shows up as one) or a stream
 address. Run the same command with the same --out folder to resume.
@@ -44,6 +51,7 @@ import cv2
 import numpy as np
 
 import canbus
+import j1587
 import j1939
 
 HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after"]
@@ -96,6 +104,76 @@ def candidates(pgns, sources, payloads, bits=False):
 
 def key(sa, pgn, payload):
     return f"{sa:02X}:{pgn:05X}:{payload.hex()}"
+
+
+SKIPPED_PIDS = (254, 255)  # data link escape and page extension: not plain parameters
+
+
+def pid_data(pid, fill):
+    """Data bytes after the PID: 1 below 128, 2 up to 191, then length 2 and 2 bytes."""
+    if pid < 128:
+        return bytes([fill])
+    if pid < 192:
+        return bytes([fill]) * 2
+    return bytes([2, fill, fill])
+
+
+def j1708_candidates(mids, pids, fills):
+    """(MID, PID, data) for every combination, in the same shape as CAN candidates."""
+    return [(mid, pid, pid_data(pid, fill)) for mid in mids for pid in pids if pid not in SKIPPED_PIDS
+            for fill in fills]
+
+
+class CanTransport:
+    """Candidates are (source address, PGN, payload), sent periodically on CAN."""
+    labels = ("SA", "PGN")
+
+    def __init__(self, bus, priority=6):
+        self.bus = bus
+        self.priority = priority
+
+    def start(self, sa, pgn, payload, period):
+        msg = can.Message(arbitration_id=j1939.make_id(pgn, sa, priority=self.priority), data=payload,
+                          is_extended_id=True)
+        return self.bus.send_periodic(msg, period)
+
+    def name(self, pgn):
+        return j1939.pgn_name(pgn)
+
+
+class PeriodicWriter:
+    """Writes one frame to a serial port now and then every period, until stopped."""
+
+    def __init__(self, port, frame, period):
+        self.port = port
+        self.frame = frame
+        self.period = period
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        while not self.stopped.is_set():
+            self.port.write(self.frame)
+            self.stopped.wait(self.period)
+
+    def stop(self):
+        self.stopped.set()
+        self.thread.join(timeout=1)
+
+
+class J1708Transport:
+    """Candidates are (MID, PID, data); each is one J1587 frame written to the bridge's serial port."""
+    labels = ("MID", "PID")
+
+    def __init__(self, port):
+        self.port = port
+
+    def start(self, mid, pid, data, period):
+        return PeriodicWriter(self.port, j1587.make_frame(mid, bytes([pid]) + data), period)
+
+    def name(self, pid):
+        return j1587.PID_NAMES.get(pid, "")
 
 
 BACKENDS = {
@@ -274,8 +352,11 @@ def read_rows(path):
 
 
 def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
-              period=0.1, priority=6, log=print):
-    """Send each candidate and record the ones that change the picture."""
+              period=0.1, priority=6, log=print, transport=None):
+    """Send each candidate and record the ones that change the picture.
+
+    bus is the CAN bus, or None when a transport is given."""
+    transport = transport or CanTransport(bus, priority)
     img_dir = os.path.join(out_dir, "img")
     os.makedirs(img_dir, exist_ok=True)
     tried_path = os.path.join(out_dir, "tried.csv")
@@ -297,8 +378,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
             idle = camera.frame()
         detector.adapt(idle)
 
-        msg = can.Message(arbitration_id=j1939.make_id(pgn, sa, priority=priority), data=payload, is_extended_id=True)
-        task = bus.send_periodic(msg, period)
+        task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
         end = stop_at + settle
@@ -324,18 +404,18 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
             cv2.imwrite(os.path.join(img_dir, stem + "_before.jpg"), idle)
             cv2.imwrite(os.path.join(img_dir, stem + "_after.jpg"), annotate(best_frame, best_mask, detector.ignore))
             append_row(hits_path, HIT_FIELDS, {
-                "hit": hit_count, "time": now, "sa": f"{sa:02X}", "pgn": f"{pgn:05X}", "name": j1939.pgn_name(pgn),
+                "hit": hit_count, "time": now, "sa": f"{sa:02X}", "pgn": f"{pgn:05X}", "name": transport.name(pgn),
                 "payload": payload.hex(" "), "change": f"{best:.4f}", "latched": "yes" if latched else "",
                 "before": f"img/{stem}_before.jpg", "after": f"img/{stem}_after.jpg"})
-            write_review(out_dir)
-            log(f"HIT {hit_count}: SA {sa:02X} PGN {pgn:05X} {payload.hex(' ')}  change {best:.2%}"
+            write_review(out_dir, transport.labels)
+            log(f"HIT {hit_count}: {transport.labels[0]} {sa:02X} {transport.labels[1]} {pgn:05X} {payload.hex(' ')}  change {best:.2%}"
                 + ("  (stayed on, new baseline taken)" if latched else ""))
         append_row(tried_path, TRIED_FIELDS, {"time": now, "sa": f"{sa:02X}", "pgn": f"{pgn:05X}",
                                               "payload": payload.hex(), "change": f"{best:.4f}", "hit": int(hit)})
         if (i + 1) % 25 == 0 or i + 1 == len(todo):
             rate = (time.time() - start) / (i + 1)
             log(f"  {i + 1}/{len(todo)}  hits {hit_count}  about {(len(todo) - i - 1) * rate / 60:.0f} min left")
-    write_review(out_dir)
+    write_review(out_dir, transport.labels)
     return hit_count
 
 
@@ -385,14 +465,14 @@ paint();
 """
 
 
-def write_review(out_dir):
+def write_review(out_dir, labels=("SA", "PGN")):
     rows = []
     for r in read_rows(os.path.join(out_dir, "hits.csv")):
         e = {k: html.escape(v or "") for k, v in r.items()}
         rows.append(
             f'<tr data-hit="{e["hit"]}" data-sa="{e["sa"]}" data-pgn="{e["pgn"]}" data-payload="{e["payload"]}">'
             f'<td>{e["hit"]}</td>'
-            f'<td><code>SA {e["sa"]}<br>PGN {e["pgn"]} {e["name"]}<br>{e["payload"]}</code>'
+            f'<td><code>{labels[0]} {e["sa"]}<br>{labels[1]} {e["pgn"]} {e["name"]}<br>{e["payload"]}</code>'
             f'<br>change {float(r["change"]):.2%}{"<br>stayed on" if r["latched"] else ""}<br>{e["time"]}</td>'
             f'<td><img src="{e["before"]}" loading="lazy"></td><td><img src="{e["after"]}" loading="lazy"></td>'
             f'<td><button onclick="mark(\'{e["hit"]}\',\'ok\')">Confirm</button> '
@@ -480,33 +560,56 @@ def cmd_preview(args):
 
 
 def cmd_sweep(args):
-    cands = candidates(parse_hex_list(args.pgns), parse_hex_list(args.sources), parse_payloads(args.payloads), args.bits)
+    if args.transport == "j1708":
+        if not args.port:
+            raise SystemExit("--transport j1708 needs --port, the ESP32 bridge's COM port")
+        if args.bits or args.background:
+            raise SystemExit("--bits and --background only work on CAN")
+        cands = j1708_candidates(parse_hex_list(args.mids), parse_hex_list(args.pids), parse_hex_list(args.fills))
+    else:
+        if not args.channel or not args.pgns:
+            raise SystemExit("A CAN sweep needs --channel and --pgns")
+        cands = candidates(parse_hex_list(args.pgns), parse_hex_list(args.sources), parse_payloads(args.payloads),
+                           args.bits)
     out_dir = args.out or os.path.join("sweeps", datetime.now().strftime("%Y%m%d_%H%M%S"))
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = canbus.open_bus(args)
+    bus = port = transport = None
     background = []
-    for spec in args.background:
-        pgn, sa, data = spec.split(":")
-        payload = bytes.fromhex(data.replace(" ", "")).ljust(8, b"\xFF")
-        msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload, is_extended_id=True)
-        background.append(bus.send_periodic(msg, 0.1))
+    if args.transport == "j1708":
+        import serial
+
+        port = serial.Serial(args.port, args.baud, timeout=0)
+        transport = J1708Transport(port)
+    else:
+        bus = canbus.open_bus(args)
+        transport = CanTransport(bus)
+        for spec in args.background:
+            pgn, sa, data = spec.split(":")
+            payload = bytes.fromhex(data.replace(" ", "")).ljust(8, b"\xFF")
+            msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload,
+                              is_extended_id=True)
+            background.append(bus.send_periodic(msg, 0.1))
     camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
         if background:
             time.sleep(2)
-        hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover)
+        hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
+                         transport=transport)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
     except KeyboardInterrupt:
-        write_review(out_dir)
+        write_review(out_dir, transport.labels)
         print(f"Stopped. Run the same command with --out {out_dir} to resume.")
     finally:
         for task in background:
             task.stop()
         camera.close()
-        canbus.close_bus(bus)
+        if bus:
+            canbus.close_bus(bus)
+        if port:
+            port.close()
 
 
 def main():
@@ -532,8 +635,14 @@ def main():
     camera_args(sub.add_parser("preview", help="live view of what the detector sees"))
     sw = sub.add_parser("sweep", help="run a sweep")
     camera_args(sw)
-    canbus.add_bus_args(sw)
-    sw.add_argument("--pgns", required=True, help="hex PGNs and ranges, e.g. FF00-FFFF,FEF1")
+    sw.add_argument("--transport", choices=["can", "j1708"], default="can", help="sweep J1939 PGNs or J1587 PIDs")
+    canbus.add_bus_args(sw, channel_required=False)
+    sw.add_argument("--port", help="j1708: the ESP32 bridge's serial port, e.g. COM11")
+    sw.add_argument("--baud", type=int, default=9600, help="j1708: serial speed (the bridge ignores it)")
+    sw.add_argument("--mids", default="80,90", help="j1708: hex MIDs to send as (128 engine, 144 likely VECU)")
+    sw.add_argument("--pids", default="00-FD", help="j1708: hex PIDs and ranges to send")
+    sw.add_argument("--fills", default="00,FF", help="j1708: hex fill bytes for the data")
+    sw.add_argument("--pgns", help="hex PGNs and ranges, e.g. FF00-FFFF,FEF1")
     sw.add_argument("--sources", default="00", help="hex source addresses, e.g. 00,03,21")
     sw.add_argument("--payloads", default="00,FF", help="fill bytes or 8-byte hex payloads")
     sw.add_argument("--bits", action="store_true", help="flip one bit at a time from the first payload")
