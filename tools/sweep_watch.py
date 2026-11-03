@@ -268,6 +268,24 @@ class Camera:
         self.cap.release()
 
 
+class NullCamera:
+    """Stands in for a camera with --camera none: a blank picture that never changes.
+
+    Sweeps then only send candidates and write tried.csv and windows.csv, for
+    use with a logic analyzer or a bus log and sweep_crosscheck.py."""
+
+    def __init__(self, tick=0.05):
+        self.tick = tick
+        self.blank = np.zeros((48, 64, 3), np.uint8)
+
+    def frame(self, timeout=2.0):
+        time.sleep(self.tick)
+        return self.blank.copy()
+
+    def close(self):
+        pass
+
+
 class ChangeDetector:
     """Compares frames against an idle baseline, ignoring masked areas.
 
@@ -541,7 +559,11 @@ def cmd_cameras(args):
 
 
 def cmd_preview(args):
-    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
+    if str(args.camera).lower() == "none":
+        camera = NullCamera()
+        print("No camera: nothing will be detected here. Check the logs with sweep_crosscheck.py afterwards.")
+    else:
+        camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     rebaseline(camera, detector)
     print("Live view: changed areas are boxed in red. b = new baseline, q = quit")
@@ -622,7 +644,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     def camera_args(p):
-        p.add_argument("--camera", default="0", help="camera number or stream address")
+        p.add_argument("--camera", default="0", help="camera number or stream address, or "none" for a sweep with no camera (sweep only)")
         p.add_argument("--width", type=int)
         p.add_argument("--height", type=int)
         p.add_argument("--backend", choices=list(BACKENDS), default="auto",

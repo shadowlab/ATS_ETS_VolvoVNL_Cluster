@@ -355,6 +355,10 @@ messages changed, a message appeared that is otherwise never sent, or bad
 frames showed up. Other signals worth trying: a phone recording sound
 (chimes, relay clicks), and bisecting a range that gave an unclear result.
 
+No camera? `sweep_watch.py sweep ... --camera none` just sends the
+candidates and writes `tried.csv` and `windows.csv`, so a logic analyzer or
+bus log plus `sweep_crosscheck.py` can find the hits instead.
+
 ### If the picture is wrong
 
 Run `python sweep_watch.py cameras`. It saves a snapshot from every camera

@@ -195,5 +195,35 @@ class J1708SweepTest(unittest.TestCase):
         self.assertEqual(port.last_write[b"\x01\x02"], seen)
 
 
+class NoCameraTest(unittest.TestCase):
+    def test_sweep_without_camera_writes_windows_and_no_hits(self):
+        with tempfile.TemporaryDirectory() as d:
+            sent = []
+
+            class Task:
+                def stop(self):
+                    pass
+
+            class Transport:
+                labels = ("MID", "PID")
+
+                def start(self, sa, pgn, payload, period):
+                    sent.append((sa, pgn))
+                    return Task()
+
+                def name(self, pgn):
+                    return ""
+
+            cands = [(0x80, 0x10 + i, b"\x00") for i in range(3)]
+            hits = sw.run_sweep(None, sw.NullCamera(), sw.ChangeDetector(), cands, d,
+                                dwell=0.1, settle=0.05, transport=Transport())
+            self.assertEqual(hits, 0)
+            self.assertEqual(len(sent), 3)
+            with open(os.path.join(d, "windows.csv"), newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 3)
+            self.assertLess(float(rows[0]["start"]), float(rows[0]["end"]))
+
+
 if __name__ == "__main__":
     unittest.main()
