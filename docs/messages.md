@@ -269,6 +269,8 @@ the VNL. What may carry over is the method:
 | Date | Bus | ID / MID-PID | Payload | Effect |
 |---|---|---|---|---|
 | 2026-10-29 | J1708 | MID 128 request for PID 245 from MID 140: `80 80 F5 8C`, and `80 00 F5` | request | The cluster answers with PID 245 about every 2.1 s instead of every 10 s, so sending on J1708 works end to end |
+| 2026-11-03 | J1708 | MID 144 (VECU, `90`) PID 70, data `FF`: `90 46 FF` | send every 0.1 s, with the can_wake heartbeat running | Lights the parking brake lamp (found with `sweep_watch.py --announce` and the GPIO41 button, then confirmed by sending it alone) |
+| 2026-11-03 | J1708 | MID 144 PID 71, data `FF`: `90 47 FF` | send every 0.1 s, with the can_wake heartbeat running | Lights the white "i" (information) lamp |
 
 ### Tried without effect
 
