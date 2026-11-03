@@ -22,6 +22,7 @@ import time
 
 import can
 
+import can_listen
 import canbus
 import j1939
 from can_send import build_message
@@ -134,11 +135,15 @@ def main():
     ap.add_argument("--rpm", type=float, default=0)
     ap.add_argument("--kmh", type=float, default=0)
     ap.add_argument("--volts", type=float, default=13.8)
+    ap.add_argument("--extra", action="append", default=[], metavar="PGN:SA:DATA",
+                    help="also send this frame (hex, as in can_listen --send) every --extra-period s; repeatable")
+    ap.add_argument("--extra-period", type=float, default=0.1, help="seconds between --extra frames (default 0.1)")
     ap.add_argument("--status", type=float, default=5, help="seconds between status lines (default 5)")
     args = ap.parse_args()
     try:
         turns = parse_vecu(args.vecu, args.group)
-    except ValueError as exc:
+        extras = [(f"extra {i + 1}", args.extra_period, can_listen.parse_send(text)) for i, text in enumerate(args.extra)]
+    except (ValueError, argparse.ArgumentTypeError) as exc:
         ap.error(str(exc))
     if len(turns) > 1:
         print(f"{len(turns)} turns of {args.dwell:g} s, about {len(turns) * args.dwell / 60:.0f} min per pass")
@@ -158,7 +163,7 @@ def main():
             if now >= next_switch:
                 turn += 1
                 vecus = turns[turn % len(turns)]
-                frames = heartbeats(vecus, args.rpm, args.kmh, args.volts)
+                frames = heartbeats(vecus, args.rpm, args.kmh, args.volts) + extras
                 print(time.strftime("%H:%M:%S"), f"turn {turn % len(turns) + 1}/{len(turns)}: VECU at {describe_turn(vecus)}")
                 for name, period, msg in frames:
                     if len(vecus) > 1 and name[:4] in ("VEP1", "CCVS"):
