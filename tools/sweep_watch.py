@@ -56,6 +56,7 @@ import j1939
 
 HIT_FIELDS = ["hit", "time", "sa", "pgn", "name", "payload", "change", "latched", "before", "after"]
 TRIED_FIELDS = ["time", "sa", "pgn", "payload", "change", "hit"]
+WINDOW_FIELDS = ["start", "end", "sa", "pgn", "payload"]  # epoch seconds, for sweep_crosscheck.py
 
 
 def parse_hex_list(text):
@@ -378,6 +379,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
             idle = camera.frame()
         detector.adapt(idle)
 
+        sent_at = time.time()
         task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
@@ -393,6 +395,9 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         if task:
             task.stop()
 
+        append_row(os.path.join(out_dir, "windows.csv"), WINDOW_FIELDS, {
+            "start": f"{sent_at:.4f}", "end": f"{time.time():.4f}", "sa": f"{sa:02X}", "pgn": f"{pgn:05X}",
+            "payload": payload.hex()})
         hit = best >= detector.min_area
         now = datetime.now().isoformat(timespec="seconds")
         if hit:
