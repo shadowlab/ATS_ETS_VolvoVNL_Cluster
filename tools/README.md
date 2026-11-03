@@ -12,6 +12,7 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
 | `flash_ci.ps1` | Flashes the ESP32-S3 J1708 bridge from a CI build and logs J1708 for a few seconds ([firmware/](../firmware/README.md)) |
+| `sweep_crosscheck.py` | Finds sweep candidates that changed the cluster's own CAN/J1708 traffic, from the logs, without the camera |
 | `sweep_watch.py` | Unattended J1939 or J1587 sweep with a camera watching the cluster; logs hits with before and after pictures |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
 | `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch` |
@@ -324,6 +325,49 @@ If the cluster needs to hear an engine to stay awake, add
 `--background F004:00:FFFFFF401FFFFFFF` (repeatable, CAN only) to keep
 sending a frame through the whole run.
 
+`--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
+frames that bring the tach, oil, coolant and check-engine lamp to life,
+2026-11-03), so a sweep can look for gauges that only work with the engine
+"running", like the speedometer. Fill with a mid-range byte rather than 00/FF,
+which read as zero or "not available" for most gauges:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --pgns FF00-FFFF --sources 27,00 --payloads 40
+```
+
+**Bus watch.** Besides the camera, a sweep watches what the cluster itself
+sends: its CAN frames (SA 17) always, and its J1708 output too with
+`--j1708-port COM11` (close j1708_listen first; the port can only be open
+once). Before the sweep it listens for `--learn` seconds (default 30) and
+ignores whatever changes on its own, like the clock. After that, any cluster
+output that changes or appears while a candidate is sent counts as a hit:
+a fault code clearing, the odometer (FEC1, PID 245) starting to count, a new
+PGN. The hit's `bus` column (and review.html) says what changed. An output
+that triggers three hits is treated as noise from then on. `--camera none`
+sweeps on the bus watch alone; `--no-bus-watch` turns it off. Use
+`--dwell 2` or more so slow outputs (the fault list repeats about every
+1.1 s) get a chance to change:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j1708-port COM11 --pgns FF00-FFFF --sources 27,00 --payloads 40 --dwell 2
+```
+
+**Check first.** `--check` sends something we know works before the long
+run: with `--wake`, EEC1 at `--check-rpm` (default 2000) instead of the wake's
+1000 for 6 s, so the tach jumps. It reports frames sent, send errors and
+cluster frames heard, whether the camera saw the tach move (if not, it's out
+of view or under an ignore area), and what the bus watch saw. Then it
+tests the bus watch on two reactions we know the cluster makes: it asks for
+the cluster's address claim on CAN (answered at once), and, with
+`--j1708-port` and `--wake`, pauses the engine frames until the cluster's
+J1708 fault report shows SID 200, then waits for it to clear (up to about
+35 s each way). On FAIL it asks
+before starting the sweep. `--check-only` runs just the check:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j1708-port COM11 --check-only
+```
+
 Each run gets a folder under `sweeps/`. Open its `review.html` to see every
 hit with before and after pictures, mark it confirmed or ignored, add a
 note, and export the marks to CSV. Stop with Ctrl+C at any time, and rerun
@@ -336,6 +380,33 @@ python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF2
 ```
 
 Copy confirmed results into [docs/messages.md](../docs/messages.md).
+
+### Second opinion without the camera
+
+A sweep also writes `windows.csv` (start and end time of every candidate).
+A sweep holds its own bus (the CANable, or the J1708 serial port), and
+neither can be opened twice. So log the *other* bus: during a CAN sweep run
+`j1708_listen.py --port COM6 --log j1708.csv` (the cluster's fault list
+rides on J1708), and during a J1708 sweep run `can_listen.py --log can.csv`.
+Keep it running for the whole sweep, then:
+
+    python sweep_crosscheck.py sweeps/run1 --j1708 j1708.csv
+    python sweep_crosscheck.py sweeps/run1 --can can.csv
+
+It lists candidates during which the cluster's fault list or status
+messages changed, a message appeared that is otherwise never sent, or bad
+frames showed up. Other signals worth trying: a phone recording sound
+(chimes, relay clicks), and bisecting a range that gave an unclear result.
+
+With the logic analyzer on a J1708 sweep (`la_capture.py capture --log x_la.csv`
+running alongside), no clock sync or `windows.csv` is needed: the frames the
+sweep sent show up on the TX line and mark each candidate.
+
+    python sweep_crosscheck.py --la x_la.csv
+
+No camera? `sweep_watch.py sweep ... --camera none` just sends the
+candidates and writes `tried.csv` and `windows.csv`, so a logic analyzer or
+bus log plus `sweep_crosscheck.py` can find the hits instead.
 
 ### If the picture is wrong
 

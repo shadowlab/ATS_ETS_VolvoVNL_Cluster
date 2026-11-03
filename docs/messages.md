@@ -222,9 +222,16 @@ keyswitch) and CCVS1 from the VECU address, EEC1 (priority 3, 20 ms, torque
 fields filled), ET1, EFL/P1 and a lamps-off DM1 from the engine. With several
 VECU addresses it tries each in turn:
 
-    python can_wake.py --channel COM5 --vecu 27,21,31 --dwell 30 --rpm 1000 --kmh 50
+    python j1708_listen.py --port COM11 --log wake_j1708.csv
+    python can_wake.py --interface gs_usb --channel 0 --vecu 27,21,31 --dwell 30 --rpm 1000 --kmh 50
 
-Run `j1708_listen.py` alongside and watch SID 201, the needles and the lamps.
+The two run side by side in two terminals: the CANable (gs_usb) is not a COM
+port, so only the ESP32 bridge's COM port is in use, by `j1708_listen.py`.
+Start the listener first and watch SID 201, the needles and the lamps. The
+status line every 5 s should show cluster frames heard; if it shows none or
+send errors, replug the CANable. On the bench (2026-11-02) the engine frames
+cleared SID 200 within ~10 s, which also starts the buzzer (probably low air
+with the engine running).
 Requesting Component ID is a separate one-off:
 
     python can_send.py --channel COM5 --pgn EA00 --sa F9 --da 17 --data "EB FE 00" --period 0

@@ -14,6 +14,7 @@ import unittest
 import can
 import numpy as np
 
+import can_wake
 import j1587
 import j1939
 import sweep_watch as sw
@@ -195,5 +196,188 @@ class J1708SweepTest(unittest.TestCase):
         self.assertEqual(port.last_write[b"\x01\x02"], seen)
 
 
+class NoCameraTest(unittest.TestCase):
+    def test_sweep_without_camera_writes_windows_and_no_hits(self):
+        with tempfile.TemporaryDirectory() as d:
+            sent = []
+
+            class Task:
+                def stop(self):
+                    pass
+
+            class Transport:
+                labels = ("MID", "PID")
+
+                def start(self, sa, pgn, payload, period):
+                    sent.append((sa, pgn))
+                    return Task()
+
+                def name(self, pgn):
+                    return ""
+
+            cands = [(0x80, 0x10 + i, b"\x00") for i in range(3)]
+            hits = sw.run_sweep(None, sw.NullCamera(), sw.ChangeDetector(), cands, d,
+                                dwell=0.1, settle=0.05, transport=Transport())
+            self.assertEqual(hits, 0)
+            self.assertEqual(len(sent), 3)
+            with open(os.path.join(d, "windows.csv"), newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 3)
+            self.assertLess(float(rows[0]["start"]), float(rows[0]["end"]))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakeCluster:
+    """Sends a clock frame that always changes, a status frame, and changes the status while TARGET arrives."""
+
+    def __init__(self, channel, target_id, answer_requests=True):
+        self.bus = can.Bus(interface="virtual", channel=channel)
+        self.target_id = target_id
+        self.answer_requests = answer_requests
+        self.last_seen = 0.0
+        self.running = True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        n = 0
+        next_send = 0.0
+        while self.running:
+            msg = self.bus.recv(timeout=0.01)
+            if msg and msg.arbitration_id == self.target_id:
+                self.last_seen = time.time()
+            if msg and j1939.parse_id(msg.arbitration_id)[1] == 0xEA00 and self.answer_requests:
+                self.bus.send(can.Message(arbitration_id=j1939.make_id(0xEE00, 0x17), data=[0] * 8,
+                                          is_extended_id=True))
+            if time.time() >= next_send:
+                n += 1
+                speed = 0x40 if time.time() - self.last_seen < 0.3 else 0x00
+                self.bus.send(can.Message(arbitration_id=j1939.make_id(0xFEE6, 0x17), data=[n & 0xFF] * 8,
+                                          is_extended_id=True))
+                self.bus.send(can.Message(arbitration_id=j1939.make_id(0xFEC1, 0x17), data=[speed] * 8,
+                                          is_extended_id=True))
+                next_send = time.time() + 0.1
+
+    def close(self):
+        self.running = False
+        time.sleep(0.05)
+        self.bus.shutdown()
+
+
+class BusWatchTest(unittest.TestCase):
+    def test_learns_noise_and_reports_changes(self):  # noqa
+        w = sw.BusWatch()
+        w.observe(("CAN", 0xFEE6), b"\x01")
+        w.observe(("CAN", 0xFEC1), b"\x00")
+        t = threading.Thread(target=lambda: [w.observe(("CAN", 0xFEE6), bytes([i])) or time.sleep(0.05)
+                                             for i in range(2, 12)])
+        t.start()
+        w.learn(0.6, log=lambda *_: None)
+        t.join()
+        self.assertIn(("CAN", 0xFEE6), w.noisy)
+        self.assertNotIn(("CAN", 0xFEC1), w.noisy)
+        w.mark()
+        w.observe(("CAN", 0xFEE6), b"\x99")
+        self.assertEqual(w.changes(), [])
+        w.observe(("CAN", 0xFEC1), b"\x40")
+        w.observe(("CAN", 0xFEC1), b"\x00")      # back again before the window ends: still a change
+        w.observe(("J1708", 140, 245, None), b"\xf5\x04")
+        self.assertEqual(len(w.changes()), 2)
+
+    def test_repeat_offender_becomes_noise(self):
+        w = sw.BusWatch(noisy_after=2)
+        key = ("J1708", 140, 251, None)
+        w.blame([key], log=lambda *_: None)
+        self.assertNotIn(key, w.noisy)
+        w.blame([key], log=lambda *_: None)
+        self.assertIn(key, w.noisy)
+
+    def test_j1708_keys(self):
+        w = sw.BusWatch()
+        w.observe_j1708(j1587.make_frame(140, [254, 128, 4, 0xd4, 0x80]))
+        w.observe_j1708(j1587.make_frame(140, [254, 127, 4, 0xd4, 0xc2]))
+        w.observe_j1708(j1587.make_frame(140, [245, 4, 1, 2, 3, 4]))
+        self.assertEqual(len(w.latest), 3)
+
+    def test_sweep_without_camera_finds_target(self):
+        channel = "bus_watch_sweep"
+        target_id = j1939.make_id(0xFF02, 0x27)
+        cluster = FakeCluster(channel, target_id)
+        bus = can.Bus(interface="virtual", channel=channel)
+        watch = sw.BusWatch()
+        transport = sw.CanTransport(bus, sender=can_wake.CanSender(bus, on_rx=watch.observe_can))
+        out = tempfile.mkdtemp()
+        try:
+            watch.learn(0.6, log=lambda *_: None)
+            cands = sw.candidates([0xFF00, 0xFF01, 0xFF02, 0xFF03], [0x27], sw.parse_payloads("40"))
+            hits = sw.run_sweep(bus, sw.NullCamera(), sw.ChangeDetector(), cands, out, dwell=0.4, settle=0.3,
+                                recover=0.5, log=lambda *_: None, transport=transport, watch=watch)
+        finally:
+            transport.sender.close()
+            bus.shutdown()
+            cluster.close()
+        rows = sw.read_rows(os.path.join(out, "hits.csv"))
+        self.assertEqual(hits, 1)
+        self.assertEqual((rows[0]["sa"], rows[0]["pgn"]), ("27", "0FF02"))
+        self.assertIn("FEC1", rows[0]["bus"])
+        self.assertNotIn("FEE6", rows[0]["bus"])
+
+
+class CheckTest(unittest.TestCase):
+    def run_check(self, rpm_seen):
+        channel = f"check_{rpm_seen}"
+        eec1 = next(m for n, _, m in can_wake.heartbeats(0x27, rpm_seen, 0, 13.8) if n == "EEC1")
+        camera = FakeCamera(channel, eec1.arbitration_id, eec1.data)
+        cluster = FakeCluster(channel, 0)
+        bus = can.Bus(interface="virtual", channel=channel)
+        sender = can_wake.CanSender(bus, can_wake.heartbeats(0x27, 1000, 0, 13.8))
+        try:
+            time.sleep(0.3)
+            return sw.run_check(sender, camera, sw.ChangeDetector(ignore=[[0, 0, 40, 20]]), None, True, 1.0, 2000,
+                                1000, recover=0.1, log=lambda *_: None)
+        finally:
+            sender.close()
+            bus.shutdown()
+            camera.close()
+            cluster.close()
+
+    def test_passes_when_the_tach_moves(self):
+        self.assertTrue(self.run_check(2000))
+
+    def test_fails_when_nothing_moves(self):
+        self.assertFalse(self.run_check(3000))
+
+    def test_runs_without_a_camera(self):
+        bus = can.Bus(interface="virtual", channel="check_nocam")
+        sender = can_wake.CanSender(bus, can_wake.heartbeats(0x27, 1000, 0, 13.8))
+        try:
+            ok = sw.run_check(sender, sw.NullCamera(), sw.ChangeDetector(), None, True, 0.3, 2000, 1000,
+                              recover=0.0, log=lambda *_: None)
+        finally:
+            sender.close()
+            bus.shutdown()
+        self.assertFalse(ok)   # nothing heard from a cluster, but no crash
+
+
+class BusCheckTest(unittest.TestCase):
+    def run_bus_check(self, answer):
+        channel = f"buscheck_{answer}"
+        cluster = FakeCluster(channel, 0, answer_requests=answer)
+        bus = can.Bus(interface="virtual", channel=channel)
+        watch = sw.BusWatch()
+        sender = can_wake.CanSender(bus, on_rx=watch.observe_can)
+        try:
+            time.sleep(0.3)
+            return sw.bus_check(sender, watch, True, log=lambda *_: None)
+        finally:
+            sender.close()
+            bus.shutdown()
+            cluster.close()
+
+    def test_claim_answer_passes(self):
+        self.assertTrue(self.run_bus_check(True))
+
+    def test_no_answer_fails(self):
+        self.assertFalse(self.run_bus_check(False))
