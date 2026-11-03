@@ -289,3 +289,28 @@ class BusWatchTest(unittest.TestCase):
         self.assertEqual((rows[0]["sa"], rows[0]["pgn"]), ("27", "0FF02"))
         self.assertIn("FEC1", rows[0]["bus"])
         self.assertNotIn("FEE6", rows[0]["bus"])
+
+
+class CheckTest(unittest.TestCase):
+    def run_check(self, rpm_seen):
+        channel = f"check_{rpm_seen}"
+        eec1 = next(m for n, _, m in can_wake.heartbeats(0x27, rpm_seen, 0, 13.8) if n == "EEC1")
+        camera = FakeCamera(channel, eec1.arbitration_id, eec1.data)
+        cluster = FakeCluster(channel, 0)
+        bus = can.Bus(interface="virtual", channel=channel)
+        sender = can_wake.CanSender(bus, can_wake.heartbeats(0x27, 1000, 0, 13.8))
+        try:
+            time.sleep(0.3)
+            return sw.run_check(sender, camera, sw.ChangeDetector(ignore=[[0, 0, 40, 20]]), None, True, 1.0, 2000,
+                                1000, recover=0.1, log=lambda *_: None)
+        finally:
+            sender.close()
+            bus.shutdown()
+            camera.close()
+            cluster.close()
+
+    def test_passes_when_the_tach_moves(self):
+        self.assertTrue(self.run_check(2000))
+
+    def test_fails_when_nothing_moves(self):
+        self.assertFalse(self.run_check(3000))

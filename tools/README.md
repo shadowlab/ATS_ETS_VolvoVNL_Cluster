@@ -351,6 +351,17 @@ sweeps on the bus watch alone; `--no-bus-watch` turns it off. Use
 python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j1708-port COM11 --pgns FF00-FFFF --sources 27,00 --payloads 40 --dwell 2
 ```
 
+**Check first.** `--check` sends something we know works before the long
+run: with `--wake`, EEC1 at `--check-rpm` (default 2000) instead of the wake's
+1000 for 6 s, so the tach jumps. It reports frames sent, send errors and
+cluster frames heard, whether the camera saw the tach move (if not, it's out
+of view or under an ignore area), and what the bus watch saw. On FAIL it asks
+before starting the sweep. `--check-only` runs just the check:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j1708-port COM11 --check-only
+```
+
 Each run gets a folder under `sweeps/`. Open its `review.html` to see every
 hit with before and after pictures, mark it confirmed or ignored, add a
 note, and export the marks to CSV. Stop with Ctrl+C at any time, and rerun

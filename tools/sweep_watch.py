@@ -508,6 +508,64 @@ class NullCamera:
         pass
 
 
+def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000, recover=5.0, log=print):
+    """Send something known to move the cluster and check the sweep sees it. True if it did.
+
+    With --wake running, the known change is the tach: EEC1 at `rpm` instead of
+    the wake's speed. Without it, it's the whole can_wake engine heartbeat,
+    which moves the tach and clears the cluster's SID 200 fault (seen by the
+    bus watch on J1708, which reports faults about every 15 s).
+    """
+    sent, errors, heard, last_error = sender.stats()
+    if heard == 0:
+        log("CHECK: nothing heard from the cluster on CAN; is it powered, is CAN wired, is the 120 ohm jumper fitted?")
+    if wake:
+        frames = [f for f in can_wake.heartbeats(0x27, rpm, 0, 13.8) if f[0] == "EEC1"]
+        what = f"tach to {rpm:g} rpm (from {wake_rpm:g})"
+    else:
+        frames = can_wake.heartbeats(0x27, rpm, 0, 13.8)
+        what = f"engine heartbeat at {rpm:g} rpm"
+    log(f"CHECK: sending the {what} for {seconds:g} s")
+    if not isinstance(camera, NullCamera):
+        rebaseline(camera, detector)
+    snapshot = watch.mark() if watch else None
+    for name, period, msg in frames:
+        sender.set(name, period, msg)
+    best = 0.0
+    end = time.time() + seconds
+    while time.time() < end:
+        score, _ = detector.diff(camera.frame())
+        best = max(best, score)
+    if wake:
+        for name, period, msg in can_wake.heartbeats(0x27, wake_rpm, 0, 13.8):
+            if name == "EEC1":
+                sender.set(name, period, msg)
+    else:
+        for name, _, _ in frames:
+            sender.remove(name)
+    sent, errors, heard, last_error = sender.stats()
+    log(f"CHECK: sent {sent} frames, {errors} send errors, heard {heard} cluster frames"
+        + (f" (last error: {last_error})" if last_error else ""))
+    camera_ok = isinstance(camera, NullCamera) or best >= detector.min_area
+    if not isinstance(camera, NullCamera):
+        log(f"CHECK: camera {'saw' if camera_ok else 'did NOT see'} it (change {best:.2%}, needs {detector.min_area:.2%}). "
+            + ("" if camera_ok else "Is the tach in view and not masked by the ignore areas?"))
+    bus_ok = True
+    if watch:
+        changed = watch.changes()
+        if changed:
+            log(f"CHECK: bus watch saw: {describe_changes(watch, changed, snapshot)}")
+        elif not wake:
+            bus_ok = False
+            log("CHECK: bus watch saw no change (with --j1708-port, SID 200 should clear within ~15 s)")
+        else:
+            log("CHECK: bus watch saw no change (expected: the cluster doesn't report rpm)")
+    ok = camera_ok and bus_ok and errors == 0 and heard > 0
+    log(f"CHECK: {'PASS' if ok else 'FAIL'}")
+    time.sleep(recover)   # let the needle settle back before the sweep's baseline
+    return ok
+
+
 def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
               period=0.1, priority=6, log=print, transport=None, watch=None):
     """Send each candidate and record the ones that change the picture or the cluster's output.
@@ -748,10 +806,10 @@ def cmd_sweep(args):
             raise SystemExit("--bits, --background and --wake only work on CAN")
         cands = j1708_candidates(parse_hex_list(args.mids), parse_hex_list(args.pids), parse_hex_list(args.fills))
     else:
-        if not args.channel or not args.pgns:
+        if not args.channel or not (args.pgns or args.check_only):
             raise SystemExit("A CAN sweep needs --channel and --pgns")
         cands = candidates(parse_hex_list(args.pgns), parse_hex_list(args.sources), parse_payloads(args.payloads),
-                           args.bits)
+                           args.bits) if args.pgns else []
     out_dir = args.out or os.path.join("sweeps", datetime.now().strftime("%Y%m%d_%H%M%S"))
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
@@ -799,6 +857,16 @@ def cmd_sweep(args):
             watch.learn(args.learn)
             if not watch.latest:
                 print("WARNING: heard nothing from the cluster; the bus watch can't find hits")
+        if args.check or args.check_only:
+            if not isinstance(transport, CanTransport):
+                raise SystemExit("--check works on CAN sweeps only")
+            seconds = args.check_seconds or (6 if args.wake else 20)
+            ok = run_check(transport.sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
+                           args.wake_rpm, args.recover)
+            if args.check_only:
+                return
+            if not ok and input("Check failed. Start the sweep anyway? [y/N] ").strip().lower() != "y":
+                return
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
                          transport=transport, watch=watch)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
@@ -858,6 +926,11 @@ def main():
     sw.add_argument("--j1708-port", help="CAN sweep: also watch the cluster's J1708 output on this bridge port")
     sw.add_argument("--learn", type=float, default=30,
                     help="seconds to watch the cluster's output before the sweep, to learn what changes by itself")
+    sw.add_argument("--check", action="store_true",
+                    help="CAN: before the sweep, send a known change (the tach) and check the camera/bus watch see it")
+    sw.add_argument("--check-only", action="store_true", help="CAN: run --check and stop")
+    sw.add_argument("--check-rpm", type=float, default=2000, help="engine speed for --check (default 2000)")
+    sw.add_argument("--check-seconds", type=float, help="how long --check sends (default 6 with --wake, else 20)")
     sw.add_argument("--wake", action="store_true",
                     help="CAN: run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time")
     sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")
