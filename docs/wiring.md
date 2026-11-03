@@ -94,6 +94,7 @@ and keep the 4.7 kΩ bias resistors R1/R2 ([parts.md](parts.md#notes-on-the-j170
 | GPIO18 | XY-485 RXD | UART1 RX |
 | GND | XY-485 GND, common ground | |
 | GPIO6 | logic analyzer CH4 only | Sweep marker, once firmware toggles it |
+| GPIO41 | push button to GND | "I saw a change" button; internal pull-up, reported to the PC (and clip analyzer CH5 here to see presses on the capture) |
 
 In stage 1 only the XY-485 rows (3V3, GPIO17, GPIO18, GND) are wired; the
 SN65HVD230 rows are stage 2.

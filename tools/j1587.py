@@ -21,6 +21,7 @@ MID_NAMES = {
     144: "Vehicle ECU",
     146: "Climate control",
     172: "Test tool",
+    254: "Bench button (ESP32)",
     206: "Radio",
     216: "Lighting control module",
     219: "VORAD",
@@ -94,6 +95,22 @@ def decode_diag_codes(data):
         text += f", x{count})" if count is not None else ")"
         codes.append(text)
     return codes
+
+
+BUTTON_MID = 254   # the ESP32's GPIO41 button: MID 254, PID 127, one byte counting presses
+BUTTON_PID = 127
+
+
+def button_frame(seq):
+    """The frame the bridge firmware sends to the PC (never on the bus) for press number seq."""
+    return make_frame(BUTTON_MID, bytes([BUTTON_PID, seq & 0xFF]))
+
+
+def parse_button(frame):
+    """Press number if frame is a bench button frame, else None."""
+    if len(frame) == 4 and frame[0] == BUTTON_MID and frame[1] == BUTTON_PID and is_valid(frame):
+        return frame[2]
+    return None
 
 
 def checksum(body):
@@ -198,6 +215,8 @@ def parse_params(data):
 def describe(frame):
     mid = frame[0]
     parts = [f"MID {mid} {MID_NAMES.get(mid, '')}".rstrip()]
+    if parse_button(frame) is not None:
+        return f"BUTTON pressed (press #{frame[2]})"
     for pid, value in parse_params(frame[1:-1]):
         text = f"PID {pid} {PID_NAMES.get(pid, '')}".rstrip() + f" [{value.hex(' ')}]"
         if pid == DATA_LINK_ESCAPE and value:

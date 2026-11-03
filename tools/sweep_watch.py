@@ -503,12 +503,44 @@ def describe_changes(watch, keys, snapshot):
     return "; ".join(parts)
 
 
-class J1708Reader:
-    """Reads the cluster's J1708 output from the ESP32 bridge into a BusWatch."""
+BUTTON_FIELDS = ["time", "press", "now_sending", "since_s", "before_that", "since_s2"]
 
-    def __init__(self, port, watch, gap=0.004):
+
+class ButtonLog:
+    """Notes which candidates were being sent when you pressed the ESP32's button (GPIO41).
+
+    A lamp usually reacts a moment after the send that caused it, so both the
+    candidate on the wire and the one before it are recorded."""
+
+    def __init__(self, out_dir, log=print):
+        self.path = os.path.join(out_dir, "buttons.csv")
+        self.log = log
+        self.current = self.previous = None   # (label, sent_at)
+        self.presses = 0
+
+    def sending(self, label):
+        self.previous, self.current = self.current, (label, time.time())
+
+    def press(self, seq):
+        now = time.time()
+        (cur, cur_t), (prev, prev_t) = [(c or ("", now)) for c in (self.current, self.previous)]
+        self.presses += 1
+        append_row(self.path, BUTTON_FIELDS, {
+            "time": datetime.now().isoformat(timespec="seconds"), "press": seq, "now_sending": cur,
+            "since_s": f"{now - cur_t:.1f}", "before_that": prev, "since_s2": f"{now - prev_t:.1f}"})
+        self.log(f"BUTTON #{seq} at {datetime.now().strftime('%H:%M:%S')}: sending {cur or '(nothing yet)'} "
+                 f"for {now - cur_t:.1f} s, before that {prev or '(nothing)'}")
+
+
+class J1708Reader:
+    """Reads the cluster's J1708 output from the ESP32 bridge into a BusWatch.
+
+    Button frames from the ESP32 (MID 254) go to on_button instead of the watch."""
+
+    def __init__(self, port, watch, gap=0.004, on_button=None):
         self.port = port
         self.watch = watch
+        self.on_button = on_button
         self.gap = gap
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -525,7 +557,12 @@ class J1708Reader:
                 continue
             if chunk and time.time() - last >= self.gap:
                 for frame in j1587.split_frames(bytes(chunk)) or []:
-                    self.watch.observe_j1708(frame)
+                    seq = j1587.parse_button(frame)
+                    if seq is not None:
+                        if self.on_button:
+                            self.on_button(seq)
+                    elif self.watch:
+                        self.watch.observe_j1708(frame)
                 chunk.clear()
             time.sleep(0.001)
 
@@ -644,7 +681,7 @@ def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000
 
 
 def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
-              period=0.1, priority=6, log=print, transport=None, watch=None, announce=False):
+              period=0.1, priority=6, log=print, transport=None, watch=None, announce=False, buttons=None):
     """Send each candidate and record the ones that change the picture or the cluster's output.
 
     bus is the CAN bus, or None when a transport is given. watch is an
@@ -653,7 +690,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         transport = CanTransport(bus, priority)
         try:
             return run_sweep(bus, camera, detector, cands, out_dir, dwell, settle, recover, period, priority, log,
-                             transport, watch, announce)
+                             transport, watch, announce, buttons)
         finally:
             transport.close()
     img_dir = os.path.join(out_dir, "img")
@@ -679,6 +716,8 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
 
         snapshot = watch.mark() if watch else None
         sent_at = time.time()
+        if buttons:
+            buttons.sending(f"{transport.labels[0]} {sa:02X} {transport.labels[1]} {pgn:05X} data {payload.hex(' ')}")
         if announce:
             log(f"{datetime.now().strftime('%H:%M:%S')}  sending {transport.labels[0]} {sa:02X} "
                 f"{transport.labels[1]} {pgn:05X} data {payload.hex(' ')}")
@@ -906,6 +945,7 @@ def cmd_sweep(args):
     bus = port = transport = reader = wake_sender = None
     background = []
     watch = None if args.no_bus_watch else BusWatch()
+    buttons = ButtonLog(out_dir)
     if args.transport == "j1708":
         import serial
 
@@ -916,8 +956,7 @@ def cmd_sweep(args):
             wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8),
                                             on_rx=watch.observe_can if watch else None)
             print(f"Running the can_wake engine heartbeat on CAN ({args.wake_rpm:g} rpm) before the J1708 sweep starts")
-        if watch:
-            reader = J1708Reader(port, watch)
+        reader = J1708Reader(port, watch, on_button=buttons.press)  # always: the button frames come this way
     else:
         bus = canbus.open_bus(args)
         for spec in args.background:
@@ -931,11 +970,11 @@ def cmd_sweep(args):
             print(f"Running the can_wake engine heartbeat underneath ({args.wake_rpm:g} rpm)")
         transport = CanTransport(bus, sender=can_wake.CanSender(bus, background,
                                                                 on_rx=watch.observe_can if watch else None))
-        if watch and args.j1708_port:
+        if args.j1708_port:
             import serial
 
             port = serial.Serial(args.j1708_port, args.baud, timeout=0)
-            reader = J1708Reader(port, watch)
+            reader = J1708Reader(port, watch, on_button=buttons.press)
     if str(args.camera).lower() == "none":
         camera, detector = NullCamera(), ChangeDetector()
         if not watch:
@@ -967,7 +1006,7 @@ def cmd_sweep(args):
                       "or add --ignore-check to sweep anyway.")
                 return
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
-                         announce=args.announce, transport=transport, watch=watch)
+                         announce=args.announce, transport=transport, watch=watch, buttons=buttons)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
     except KeyboardInterrupt:
         write_review(out_dir, transport.labels)

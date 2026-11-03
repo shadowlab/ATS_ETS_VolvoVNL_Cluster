@@ -14,6 +14,7 @@ while the CANable does all CAN1 work.
 - **PC to bus:** write one whole frame (MID, data, checksum) per write. The
   board waits for the bus to be idle (22 bit times, J1708 priority 5) and
   sends it on GPIO17, holding GPIO6 high while it goes out.
+- **Button:** a push button between GPIO41 and GND (internal pull-up, 30 ms debounce). Each press sends the PC one frame, `FE 7F <press number> <checksum>` (MID 254, PID 127), never onto the bus. `j1708_listen.py` shows it as `BUTTON pressed`; `sweep_watch.py` logs the candidate being sent in `buttons.csv`; `tools/button_test.py` checks it. Clip analyzer CH5 to GPIO41 to see presses on a capture too.
 - GPIO4 (SN65HVD230 CTX) is held high, so a wired transceiver stays recessive.
 
 Use the board's native USB port (often labelled USB, not COM or UART). The
