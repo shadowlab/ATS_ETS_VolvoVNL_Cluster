@@ -62,6 +62,7 @@ FMI_NAMES = {
     5: "open circuit", 6: "short circuit", 7: "no mechanical response",
     8: "abnormal frequency", 9: "abnormal update rate", 10: "abnormal rate of change",
     11: "unknown failure", 12: "device lost", 13: "out of calibration", 14: "special",
+    15: "least severe",
 }
 
 
@@ -88,7 +89,7 @@ def decode_diag_codes(data):
         else:
             kind, name, ident = "PID", "", ident + 256
         fmi = code & 0x0F
-        text = f"{kind} {ident}" + (f" {name}" if name else "") + f" FMI {fmi} {FMI_NAMES[fmi]}"
+        text = f"{kind} {ident}" + (f" {name}" if name else "") + f" FMI {fmi} {FMI_NAMES.get(fmi, '')}".rstrip()
         text += " (inactive" if code & 0x40 else " (active"
         text += f", x{count})" if count is not None else ")"
         codes.append(text)

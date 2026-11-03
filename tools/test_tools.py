@@ -74,6 +74,11 @@ class J1587Test(unittest.TestCase):
         self.assertEqual(j1587.decode_diag_codes(bytes([200, 0xF9])),
                          ["SID 200 Data link, engine ECU (MID 128) FMI 9 abnormal update rate (inactive)"])
 
+    def test_diag_codes_with_fmi_15(self):
+        # A sweep sends PID 194 with fill FF, which decodes as FMI 15.
+        text = j1587.describe(j1587.make_frame(128, [194, 2, 0xFF, 0xFF]))
+        self.assertIn("FMI 15", text)
+
     def test_describe_request(self):
         text = j1587.describe(j1587.make_frame(140, [128, 84, 144]))
         self.assertIn("asks MID 144 for PID 84 Road speed", text)
