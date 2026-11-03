@@ -341,18 +341,19 @@ Copy confirmed results into [docs/messages.md](../docs/messages.md).
 ### Second opinion without the camera
 
 A sweep also writes `windows.csv` (start and end time of every candidate).
-Keep `j1708_listen.py --log j1708.csv` (and, for CAN, `can_listen.py --log
-can.csv`) running on the same PC for the whole sweep, then:
+A sweep holds its own bus (the CANable, or the J1708 serial port), and
+neither can be opened twice. So log the *other* bus: during a CAN sweep run
+`j1708_listen.py --port COM6 --log j1708.csv` (the cluster's fault list
+rides on J1708), and during a J1708 sweep run `can_listen.py --log can.csv`.
+Keep it running for the whole sweep, then:
 
     python sweep_crosscheck.py sweeps/run1 --j1708 j1708.csv
+    python sweep_crosscheck.py sweeps/run1 --can can.csv
 
 It lists candidates during which the cluster's fault list or status
 messages changed, a message appeared that is otherwise never sent, or bad
-frames showed up. The CANable can be opened by only one program, so a CAN
-sweep cannot be logged by a second process; use the J1708 log, or log CAN
-from the sweep's own bus. Other signals worth trying: a phone recording
-sound (chimes, relay clicks), and bisecting a range that gave an unclear
-result.
+frames showed up. Other signals worth trying: a phone recording sound
+(chimes, relay clicks), and bisecting a range that gave an unclear result.
 
 ### If the picture is wrong
 
