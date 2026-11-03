@@ -644,7 +644,7 @@ def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000
 
 
 def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
-              period=0.1, priority=6, log=print, transport=None, watch=None):
+              period=0.1, priority=6, log=print, transport=None, watch=None, announce=False):
     """Send each candidate and record the ones that change the picture or the cluster's output.
 
     bus is the CAN bus, or None when a transport is given. watch is an
@@ -653,7 +653,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         transport = CanTransport(bus, priority)
         try:
             return run_sweep(bus, camera, detector, cands, out_dir, dwell, settle, recover, period, priority, log,
-                             transport, watch)
+                             transport, watch, announce)
         finally:
             transport.close()
     img_dir = os.path.join(out_dir, "img")
@@ -679,6 +679,9 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
 
         snapshot = watch.mark() if watch else None
         sent_at = time.time()
+        if announce:
+            log(f"{datetime.now().strftime('%H:%M:%S')}  sending {transport.labels[0]} {sa:02X} "
+                f"{transport.labels[1]} {pgn:05X} data {payload.hex(' ')}")
         task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
@@ -964,7 +967,7 @@ def cmd_sweep(args):
                       "or add --ignore-check to sweep anyway.")
                 return
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
-                         transport=transport, watch=watch)
+                         announce=args.announce, transport=transport, watch=watch)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
     except KeyboardInterrupt:
         write_review(out_dir, transport.labels)
@@ -1026,6 +1029,8 @@ def main():
                     help="seconds to watch the cluster's output before the sweep, to learn what changes by itself")
     sw.add_argument("--check", action="store_true",
                     help="the bus check now runs before every sweep by default; this flag is kept for --check-only runs")
+    sw.add_argument("--announce", action="store_true",
+                    help="print each candidate with the time as it is sent, to match a lamp you see to what was sent")
     sw.add_argument("--no-check", action="store_true", help="skip the bus check that normally runs before the sweep")
     sw.add_argument("--ignore-check", action="store_true", help="sweep even if the bus check fails")
     sw.add_argument("--check-only", action="store_true", help="CAN: run --check and stop")
