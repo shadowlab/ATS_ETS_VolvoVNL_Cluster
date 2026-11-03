@@ -50,6 +50,7 @@ import can
 import cv2
 import numpy as np
 
+import can_wake
 import canbus
 import j1587
 import j1939
@@ -125,20 +126,36 @@ def j1708_candidates(mids, pids, fills):
 
 
 class CanTransport:
-    """Candidates are (source address, PGN, payload), sent periodically on CAN."""
+    """Candidates are (source address, PGN, payload), sent periodically on CAN.
+
+    All CAN traffic goes through one can_wake.CanSender thread, which also
+    sends any background frames and drains the adapter (a gs_usb CANable that
+    is never read stops sending after a while).
+    """
     labels = ("SA", "PGN")
 
-    def __init__(self, bus, priority=6):
-        self.bus = bus
+    def __init__(self, bus, priority=6, sender=None):
         self.priority = priority
+        self.owns_sender = sender is None
+        self.sender = sender or can_wake.CanSender(bus)
 
     def start(self, sa, pgn, payload, period):
         msg = can.Message(arbitration_id=j1939.make_id(pgn, sa, priority=self.priority), data=payload,
                           is_extended_id=True)
-        return self.bus.send_periodic(msg, period)
+        self.sender.set("candidate", period, msg)
+        return _Stop(lambda: self.sender.remove("candidate"))
 
     def name(self, pgn):
         return j1939.pgn_name(pgn)
+
+    def close(self):
+        if self.owns_sender:
+            self.sender.close()
+
+
+class _Stop:
+    def __init__(self, fn):
+        self.stop = fn
 
 
 class PeriodicWriter:
@@ -356,7 +373,13 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
     """Send each candidate and record the ones that change the picture.
 
     bus is the CAN bus, or None when a transport is given."""
-    transport = transport or CanTransport(bus, priority)
+    if transport is None:
+        transport = CanTransport(bus, priority)
+        try:
+            return run_sweep(bus, camera, detector, cands, out_dir, dwell, settle, recover, period, priority, log,
+                             transport)
+        finally:
+            transport.close()
     img_dir = os.path.join(out_dir, "img")
     os.makedirs(img_dir, exist_ok=True)
     tried_path = os.path.join(out_dir, "tried.csv")
@@ -563,8 +586,8 @@ def cmd_sweep(args):
     if args.transport == "j1708":
         if not args.port:
             raise SystemExit("--transport j1708 needs --port, the ESP32 bridge's COM port")
-        if args.bits or args.background:
-            raise SystemExit("--bits and --background only work on CAN")
+        if args.bits or args.background or args.wake:
+            raise SystemExit("--bits, --background and --wake only work on CAN")
         cands = j1708_candidates(parse_hex_list(args.mids), parse_hex_list(args.pids), parse_hex_list(args.fills))
     else:
         if not args.channel or not args.pgns:
@@ -584,13 +607,16 @@ def cmd_sweep(args):
         transport = J1708Transport(port)
     else:
         bus = canbus.open_bus(args)
-        transport = CanTransport(bus)
         for spec in args.background:
             pgn, sa, data = spec.split(":")
             payload = bytes.fromhex(data.replace(" ", "")).ljust(8, b"\xFF")
             msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload,
                               is_extended_id=True)
-            background.append(bus.send_periodic(msg, 0.1))
+            background.append((f"background {len(background) + 1}", 0.1, msg))
+        if args.wake:
+            background += can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8)
+            print(f"Running the can_wake engine heartbeat underneath ({args.wake_rpm:g} rpm)")
+        transport = CanTransport(bus, sender=can_wake.CanSender(bus, background))
     camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
@@ -603,8 +629,8 @@ def cmd_sweep(args):
         write_review(out_dir, transport.labels)
         print(f"Stopped. Run the same command with --out {out_dir} to resume.")
     finally:
-        for task in background:
-            task.stop()
+        if isinstance(transport, CanTransport):
+            transport.sender.close()
         camera.close()
         if bus:
             canbus.close_bus(bus)
@@ -648,6 +674,10 @@ def main():
     sw.add_argument("--bits", action="store_true", help="flip one bit at a time from the first payload")
     sw.add_argument("--background", action="append", default=[], metavar="PGN:SA:DATA",
                     help="also send this every 100 ms for the whole run, e.g. F004:00:FFFFFF401FFFFFFF")
+    sw.add_argument("--wake", action="store_true",
+                    help="CAN: run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time")
+    sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")
+    sw.add_argument("--wake-vecu", default="27", help="source address for --wake's VEP1/CCVS1 (default 27)")
     sw.add_argument("--dwell", type=float, default=1.0, help="seconds to send each candidate")
     sw.add_argument("--settle", type=float, default=0.5, help="seconds to keep watching after it stops")
     sw.add_argument("--recover", type=float, default=5.0, help="seconds to wait for idle after a hit")

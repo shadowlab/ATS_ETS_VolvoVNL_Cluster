@@ -324,6 +324,16 @@ If the cluster needs to hear an engine to stay awake, add
 `--background F004:00:FFFFFF401FFFFFFF` (repeatable, CAN only) to keep
 sending a frame through the whole run.
 
+`--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
+frames that bring the tach, oil, coolant and check-engine lamp to life,
+2026-11-03), so a sweep can look for gauges that only work with the engine
+"running", like the speedometer. Fill with a mid-range byte rather than 00/FF,
+which read as zero or "not available" for most gauges:
+
+```
+python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --pgns FF00-FFFF --sources 27,00 --payloads 40
+```
+
 Each run gets a folder under `sweeps/`. Open its `review.html` to see every
 hit with before and after pictures, mark it confirmed or ignored, add a
 note, and export the marks to CSV. Stop with Ctrl+C at any time, and rerun

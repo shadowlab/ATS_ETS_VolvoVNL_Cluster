@@ -18,6 +18,7 @@ docs/messages.md.
 """
 
 import argparse
+import threading
 import time
 
 import can
@@ -121,6 +122,78 @@ class Scheduler:
 
     def wait(self, now):
         return max(0.0, min(entry[1] for entry in self.entries) - now)
+
+
+class CanSender:
+    """Owns all CAN traffic for a program that has other work to do (like sweep_watch).
+
+    A background thread sends a named set of periodic frames through a
+    Scheduler and reads (drains) the adapter between sends. Frames can be added
+    and removed while it runs.
+    """
+
+    def __init__(self, bus, frames=()):
+        self.bus = bus
+        self.frames = {name: (period, msg) for name, period, msg in frames}
+        self.lock = threading.Lock()
+        self.sched = Scheduler(self._list(), time.monotonic())
+        self.sent = self.errors = self.heard = 0
+        self.last_error = ""
+        self.running = True
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _list(self):
+        return [(name, period, msg) for name, (period, msg) in self.frames.items()]
+
+    def set(self, name, period, msg):
+        with self.lock:
+            self.frames.pop(name, None)
+            self.sched.swap(self._list(), time.monotonic())   # forget the old timing: send the new frame now
+            self.frames[name] = (period, msg)
+            self.sched.swap(self._list(), time.monotonic())
+
+    def remove(self, name):
+        with self.lock:
+            if self.frames.pop(name, None) is not None:
+                self.sched.swap(self._list(), time.monotonic())
+
+    def _run(self):
+        while self.running:
+            with self.lock:
+                now = time.monotonic()
+                due = self.sched.due(now)
+                wait = self.sched.wait(now) if self.sched.entries else 0.05
+            for msg in due:
+                try:
+                    self.bus.send(msg)
+                    self.sent += 1
+                except can.CanError as exc:
+                    self.errors += 1
+                    self.last_error = str(exc)
+            try:
+                msg = self.bus.recv(timeout=max(0.001, min(wait, 0.05)))
+                for _ in range(200):
+                    if msg is None:
+                        break
+                    if msg.is_rx and not msg.is_error_frame and msg.arbitration_id & 0xFF == CLUSTER_SA:
+                        self.heard += 1
+                    msg = self.bus.recv(timeout=0.001)
+            except Exception:
+                if not self.running:
+                    break
+                raise
+
+    def stats(self):
+        """(sent, send errors, cluster frames heard, last error) since the last call."""
+        out = (self.sent, self.errors, self.heard, self.last_error)
+        self.sent = self.errors = self.heard = 0
+        self.last_error = ""
+        return out
+
+    def close(self):
+        self.running = False
+        self.thread.join(timeout=1)
 
 
 def main():
