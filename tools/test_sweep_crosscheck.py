@@ -50,3 +50,21 @@ class CrossCheckTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnalyzerTest(unittest.TestCase):
+    def test_windows_from_tx_frames(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "la.csv")
+            with open(p, "w", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["time", "line", "mid", "frame", "decoded", "marker"])
+                for k in range(2):
+                    fr = j1587.make_frame(80, bytes([k, 0]))
+                    for i in range(5):
+                        w.writerow([f"{k * 1.5 + i * 0.1:.4f}", "tx", 80, fr.hex(" "), "", 1])
+                w.writerow(["0.6", "rx", 140, j1587.make_frame(140, bytes([84, 5])).hex(" "), "", 0])
+            windows, events = sc.read_la(p)
+        self.assertEqual([w[3] for w in windows], ["00", "01"])
+        self.assertAlmostEqual(windows[0][1], 0.4)
+        self.assertEqual(len(events), 1)

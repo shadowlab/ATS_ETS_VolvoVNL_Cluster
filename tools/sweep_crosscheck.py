@@ -13,6 +13,7 @@ Changing values (odometer, clock, counters) are ignored: a message with more
 than --max-values distinct values is treated as noise.
 
     python sweep_crosscheck.py sweeps/run1 --can can.csv --j1708 j1708.csv
+    python sweep_crosscheck.py --la sweep_check_la.csv     # J1708 sweep captured by la_capture.py
 
 Prints a ranked list and writes crosscheck.csv in the sweep folder. It only
 points at candidates worth a second look; confirm by resending one.
@@ -72,6 +73,36 @@ def read_j1708(path, cluster_mid=140):
     return out
 
 
+def read_la(path, cluster_mid=140):
+    """Windows and cluster events from a la_capture.py CSV (analyzer clock, no windows.csv needed).
+
+    Each run of identical frames on the TX line is one candidate: the frames
+    the sweep sent are the markers, so no clock sync with the PC is needed."""
+    windows, events = [], []
+    last = None
+    with open(path, newline="") as f:
+        for r in csv.DictReader(f):
+            t = float(r["time"])
+            if r["decoded"].startswith("BAD"):
+                if r["line"] == "rx":
+                    events.append((t, ("J1708", "BAD"), ""))
+                continue
+            frame = bytes.fromhex(r["frame"])
+            if r["line"] == "tx":
+                if last and last[0] == frame and t - last[2] < 0.5:
+                    last[2] = t
+                    windows[-1] = (windows[-1][0], t) + windows[-1][2:]
+                else:
+                    body = frame[1:-1]
+                    pid = body[0] if body else 0
+                    windows.append((t, t, f"{frame[0]:02X}", f"{pid:02X}", body[1:].hex()))
+                    last = [frame, t, t]
+            elif frame and frame[0] == cluster_mid and len(frame) >= 3:
+                for pid, val in j1587.parse_params(frame[1:-1]):
+                    events.append((t, ("J1708", f"MID{frame[0]} PID{pid}"), val.hex()))
+    return windows, events
+
+
 def analyse(windows, events, max_values=8, margin=0.3):
     """Return [(score, window, [reasons])] for windows with something unusual.
 
@@ -104,10 +135,11 @@ def analyse(windows, events, max_values=8, margin=0.3):
     for i, items in in_window.items():
         for key, val in items:
             if key[1] in ("ERROR", "BAD"):
-                flagged[i].append((2, f"{key[0]} {key[1]} seen"))
+                flagged[i].append((2, f"{key[0]} {key[1]} frame seen (a collision with our own send also looks like this)"))
                 continue
-            if len(values[key]) > max_values:
-                continue                                # clock, odometer, counters
+            if len(values[key]) > max_values or (
+                    len(values[key]) >= 3 and len(values[key]) * 2 >= sum(values[key].values())):
+                continue                                # clock, odometer, counters: values rarely repeat
             if key not in background_keys and all(
                     wins_with[key][v] <= {i} for v in values[key]):
                 flagged[i].append((3, f"{key[0]} {key[1]} only appears here ({val})"))
@@ -122,7 +154,8 @@ def analyse(windows, events, max_values=8, margin=0.3):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("sweep_dir", help="sweep folder containing windows.csv")
+    ap.add_argument("sweep_dir", nargs="?", help="sweep folder containing windows.csv (not needed with --la)")
+    ap.add_argument("--la", help="CSV from la_capture.py: the analyzer's own clock is used, J1708 sweeps only")
     ap.add_argument("--can", help="CSV from can_listen.py --log")
     ap.add_argument("--j1708", help="CSV from j1708_listen.py --log")
     ap.add_argument("--cluster-sa", default="17", help="cluster CAN source address, hex (default 17)")
@@ -132,20 +165,24 @@ def main(argv=None):
     ap.add_argument("--margin", type=float, default=0.3, help="seconds after a window to still count (default 0.3)")
     ap.add_argument("--top", type=int, default=30)
     args = ap.parse_args(argv)
-    if not (args.can or args.j1708):
-        ap.error("give --can and/or --j1708")
-
-    wpath = os.path.join(args.sweep_dir, "windows.csv")
-    if not os.path.exists(wpath):
-        sys.exit(f"{wpath} not found. Sweeps run before this tool existed did not write it.")
-    windows = read_windows(wpath)
-    events = []
+    if args.la:
+        windows, events = read_la(args.la, args.cluster_mid)
+        out_dir = args.sweep_dir or os.path.dirname(os.path.abspath(args.la))
+    else:
+        if not (args.can or args.j1708) or not args.sweep_dir:
+            ap.error("give a sweep folder with --can and/or --j1708, or --la alone")
+        wpath = os.path.join(args.sweep_dir, "windows.csv")
+        if not os.path.exists(wpath):
+            sys.exit(f"{wpath} not found. Sweeps run before this tool existed did not write it.")
+        windows = read_windows(wpath)
+        events = []
+        out_dir = args.sweep_dir
     if args.can:
         events += read_can(args.can, args.cluster_sa)
     if args.j1708:
         events += read_j1708(args.j1708, args.cluster_mid)
-    if not events:
-        sys.exit("No cluster frames found in the logs.")
+    if not events or not windows:
+        sys.exit("No cluster frames or sent candidates found in the logs.")
     t0, t1 = min(e[0] for e in events), max(e[0] for e in events)
     covered = [w for w in windows if t0 <= w[0] and w[1] <= t1]
     print(f"{len(windows)} candidates, {len(covered)} inside the log time range, {len(events)} cluster events")
@@ -153,7 +190,7 @@ def main(argv=None):
         print("  (log files do not cover the whole sweep: keep them running for its full length)")
 
     found = analyse(windows, events, args.max_values, args.margin)
-    out = os.path.join(args.sweep_dir, "crosscheck.csv")
+    out = os.path.join(out_dir, "crosscheck.csv")
     with open(out, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["score", "start", "sa", "pgn", "payload", "why"])

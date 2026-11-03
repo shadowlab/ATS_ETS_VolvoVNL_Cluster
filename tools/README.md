@@ -355,6 +355,12 @@ messages changed, a message appeared that is otherwise never sent, or bad
 frames showed up. Other signals worth trying: a phone recording sound
 (chimes, relay clicks), and bisecting a range that gave an unclear result.
 
+With the logic analyzer on a J1708 sweep (`la_capture.py capture --log x_la.csv`
+running alongside), no clock sync or `windows.csv` is needed: the frames the
+sweep sent show up on the TX line and mark each candidate.
+
+    python sweep_crosscheck.py --la x_la.csv
+
 No camera? `sweep_watch.py sweep ... --camera none` just sends the
 candidates and writes `tried.csv` and `windows.csv`, so a logic analyzer or
 bus log plus `sweep_crosscheck.py` can find the hits instead.
