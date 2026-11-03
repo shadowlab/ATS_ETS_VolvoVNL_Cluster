@@ -7,6 +7,15 @@ be swept blindly. J1939 uses 29-bit IDs, so sweep by structure instead.
 Tools: CANable 2.0 with SavvyCAN for listening, python-can for scripted
 sweeps, and the XY-485 plus a USB-serial adapter (or the ESP32) for J1708.
 
+## Where it stands (2026-10-29)
+
+Steps 1 and the EEC1 part of step 2 are done on the bench. Both buses work
+both ways (CAN1 ACKs our frames, and the cluster answers J1708 requests), and
+the cluster at 0x17 reports a missing engine only through its own sensor
+faults. EEC1 and J1708 engine data together did not move the needles. The
+sweeps below are next, run with `tools/sweep_watch.py`
+([runbook](../tools/README.md#camera-sweep)).
+
 ## 1. Listen first
 
 Power the cluster with nothing else on the bus and log what it sends.
@@ -31,9 +40,10 @@ of turn signals and warning lights.
 
 ## 4. J1708/J1587
 
-Step through PIDs 0 to 255 from MID 128 (engine) and MID 144 (likely VECU).
-It's a small space at 9600 baud. The communication error pop-up most likely
-clears here once the right MID is heard regularly. J1708 frames are
+Step through PIDs 0 to 255 from MID 128 (engine) and MID 144 (likely VECU)
+with `sweep_watch.py sweep --transport j1708`. It's a small space at 9600
+baud. The bench showed no communication error pop-up, so this is about
+finding what moves the gauges. J1708 frames are
 MID + data + checksum (two's complement of the byte sum), and a sender waits
 for bus idle before transmitting.
 
