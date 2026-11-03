@@ -203,9 +203,10 @@ if __name__ == "__main__":
 class FakeCluster:
     """Sends a clock frame that always changes, a status frame, and changes the status while TARGET arrives."""
 
-    def __init__(self, channel, target_id):
+    def __init__(self, channel, target_id, answer_requests=True):
         self.bus = can.Bus(interface="virtual", channel=channel)
         self.target_id = target_id
+        self.answer_requests = answer_requests
         self.last_seen = 0.0
         self.running = True
         threading.Thread(target=self._run, daemon=True).start()
@@ -217,6 +218,9 @@ class FakeCluster:
             msg = self.bus.recv(timeout=0.01)
             if msg and msg.arbitration_id == self.target_id:
                 self.last_seen = time.time()
+            if msg and j1939.parse_id(msg.arbitration_id)[1] == 0xEA00 and self.answer_requests:
+                self.bus.send(can.Message(arbitration_id=j1939.make_id(0xEE00, 0x17), data=[0] * 8,
+                                          is_extended_id=True))
             if time.time() >= next_send:
                 n += 1
                 speed = 0x40 if time.time() - self.last_seen < 0.3 else 0x00
@@ -314,3 +318,25 @@ class CheckTest(unittest.TestCase):
 
     def test_fails_when_nothing_moves(self):
         self.assertFalse(self.run_check(3000))
+
+
+class BusCheckTest(unittest.TestCase):
+    def run_bus_check(self, answer):
+        channel = f"buscheck_{answer}"
+        cluster = FakeCluster(channel, 0, answer_requests=answer)
+        bus = can.Bus(interface="virtual", channel=channel)
+        watch = sw.BusWatch()
+        sender = can_wake.CanSender(bus, on_rx=watch.observe_can)
+        try:
+            time.sleep(0.3)
+            return sw.bus_check(sender, watch, True, log=lambda *_: None)
+        finally:
+            sender.close()
+            bus.shutdown()
+            cluster.close()
+
+    def test_claim_answer_passes(self):
+        self.assertTrue(self.run_bus_check(True))
+
+    def test_no_answer_fails(self):
+        self.assertFalse(self.run_bus_check(False))

@@ -140,6 +140,7 @@ class CanSender:
         self.sched = Scheduler(self._list(), time.monotonic())
         self.sent = self.errors = self.heard = 0
         self.last_error = ""
+        self.oneshot = []
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -154,6 +155,10 @@ class CanSender:
             self.frames[name] = (period, msg)
             self.sched.swap(self._list(), time.monotonic())
 
+    def send_once(self, msg):
+        with self.lock:
+            self.oneshot.append(msg)
+
     def remove(self, name):
         with self.lock:
             if self.frames.pop(name, None) is not None:
@@ -163,7 +168,8 @@ class CanSender:
         while self.running:
             with self.lock:
                 now = time.monotonic()
-                due = self.sched.due(now)
+                due = self.oneshot + self.sched.due(now)
+                self.oneshot = []
                 wait = self.sched.wait(now) if self.sched.entries else 0.05
             for msg in due:
                 try:

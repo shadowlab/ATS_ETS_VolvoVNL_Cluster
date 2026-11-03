@@ -355,7 +355,12 @@ python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --wake --j
 run: with `--wake`, EEC1 at `--check-rpm` (default 2000) instead of the wake's
 1000 for 6 s, so the tach jumps. It reports frames sent, send errors and
 cluster frames heard, whether the camera saw the tach move (if not, it's out
-of view or under an ignore area), and what the bus watch saw. On FAIL it asks
+of view or under an ignore area), and what the bus watch saw. Then it
+tests the bus watch on two reactions we know the cluster makes: it asks for
+the cluster's address claim on CAN (answered at once), and, with
+`--j1708-port` and `--wake`, pauses the engine frames until the cluster's
+J1708 fault report shows SID 200, then waits for it to clear (up to about
+35 s each way). On FAIL it asks
 before starting the sweep. `--check-only` runs just the check:
 
 ```

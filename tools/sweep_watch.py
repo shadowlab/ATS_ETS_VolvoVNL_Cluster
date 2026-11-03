@@ -414,6 +414,24 @@ class BusWatch:
             sub = body[2]
         self.observe(("J1708", mid, pid, sub), body)
 
+    def forget(self, key):
+        with self.lock:
+            self.latest.pop(key, None)
+
+    def has_j1708(self):
+        with self.lock:
+            return any(k[0] == "J1708" for k in self.latest)
+
+    def wait_for(self, key, timeout):
+        """Wait until `key` changes from its value at mark() (or appears). True if it did."""
+        end = time.time() + timeout
+        while time.time() < end:
+            with self.lock:
+                if key in self.window_changes:
+                    return True
+            time.sleep(0.1)
+        return False
+
     def mark(self):
         """Start a window: changes() then lists every output that differed at any point since."""
         with self.lock:
@@ -508,7 +526,53 @@ class NullCamera:
         pass
 
 
-def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000, recover=5.0, log=print):
+FAULT_REPORT = ("J1708", 140, 254, 127)   # the cluster's PID 254 fault report to MID 127, about every 15 s
+ENGINE_FRAMES = ("EEC1", "ET1", "EFL/P1", "DM1")
+
+
+def bus_check(sender, watch, wake, wake_vecu=0x27, wake_rpm=1000, log=print, fault_timeout=35):
+    """Known cluster reactions the bus watch must see. True if all it could test passed."""
+    ok = True
+    claim = ("CAN", 0xEE00)
+    watch.forget(claim)
+    watch.mark()
+    sender.send_once(can.Message(arbitration_id=j1939.make_id(0xEA00, 0xF9), data=[0x00, 0xEE, 0x00],
+                                 is_extended_id=True))
+    if watch.wait_for(claim, 2):
+        log("CHECK: bus watch saw the cluster answer a request for its address claim (CAN path works)")
+    else:
+        ok = False
+        log("CHECK: the cluster did NOT answer a request for its address claim on CAN")
+
+    if not watch.has_j1708():
+        log("CHECK: no J1708 heard, skipping the fault test (add --j1708-port COM11 to watch J1708)")
+        return ok
+    if not wake:
+        log("CHECK: skipping the fault test (it needs --wake)")
+        return ok
+    log(f"CHECK: pausing the engine frames until the cluster reports SID 200 (up to {fault_timeout} s)...")
+    watch.mark()
+    for name in ENGINE_FRAMES:
+        sender.remove(name)
+    seen = watch.wait_for(FAULT_REPORT, fault_timeout)
+    for name, period, msg in can_wake.heartbeats(wake_vecu, wake_rpm, 0, 13.8):
+        if name in ENGINE_FRAMES:
+            sender.set(name, period, msg)
+    if not seen:
+        log("CHECK: the fault report did NOT change with the engine gone (J1708 watch or engine frames not working)")
+        return False
+    log("CHECK: bus watch saw the fault report change with the engine gone (J1708 path works)")
+    log(f"CHECK: engine back on, waiting for the fault to clear (up to {fault_timeout} s)...")
+    watch.mark()
+    if watch.wait_for(FAULT_REPORT, fault_timeout):
+        log("CHECK: fault report changed back")
+    else:
+        log("CHECK: fault report didn't change back yet; the first sweep steps may show it")
+    return ok
+
+
+def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000, recover=5.0, log=print,
+              wake_vecu=0x27):
     """Send something known to move the cluster and check the sweep sees it. True if it did.
 
     With --wake running, the known change is the tach: EEC1 at `rpm` instead of
@@ -560,6 +624,8 @@ def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000
             log("CHECK: bus watch saw no change (with --j1708-port, SID 200 should clear within ~15 s)")
         else:
             log("CHECK: bus watch saw no change (expected: the cluster doesn't report rpm)")
+    if watch:
+        bus_ok = bus_check(sender, watch, wake, wake_vecu, wake_rpm, log) and bus_ok
     ok = camera_ok and bus_ok and errors == 0 and heard > 0
     log(f"CHECK: {'PASS' if ok else 'FAIL'}")
     time.sleep(recover)   # let the needle settle back before the sweep's baseline
@@ -862,7 +928,7 @@ def cmd_sweep(args):
                 raise SystemExit("--check works on CAN sweeps only")
             seconds = args.check_seconds or (6 if args.wake else 20)
             ok = run_check(transport.sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
-                           args.wake_rpm, args.recover)
+                           args.wake_rpm, args.recover, wake_vecu=int(args.wake_vecu, 16))
             if args.check_only:
                 return
             if not ok and input("Check failed. Start the sweep anyway? [y/N] ").strip().lower() != "y":
