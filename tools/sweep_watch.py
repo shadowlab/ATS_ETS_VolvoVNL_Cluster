@@ -559,11 +559,7 @@ def cmd_cameras(args):
 
 
 def cmd_preview(args):
-    if str(args.camera).lower() == "none":
-        camera = NullCamera()
-        print("No camera: nothing will be detected here. Check the logs with sweep_crosscheck.py afterwards.")
-    else:
-        camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
+    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     rebaseline(camera, detector)
     print("Live view: changed areas are boxed in red. b = new baseline, q = quit")
@@ -618,7 +614,11 @@ def cmd_sweep(args):
             msg = can.Message(arbitration_id=j1939.make_id(int(pgn, 16), int(sa, 16)), data=payload,
                               is_extended_id=True)
             background.append(bus.send_periodic(msg, 0.1))
-    camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
+    if str(args.camera).lower() == "none":
+        camera = NullCamera()
+        print("No camera: nothing will be detected here. Check the logs with sweep_crosscheck.py afterwards.")
+    else:
+        camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
     detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
         if background:
