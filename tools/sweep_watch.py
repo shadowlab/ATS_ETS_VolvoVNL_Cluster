@@ -910,7 +910,8 @@ def cmd_sweep(args):
         transport = J1708Transport(port)
         if args.wake:
             bus = canbus.open_bus(args)
-            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8))
+            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8),
+                                            on_rx=watch.observe_can if watch else None)
             print(f"Running the can_wake engine heartbeat on CAN ({args.wake_rpm:g} rpm) before the J1708 sweep starts")
         if watch:
             reader = J1708Reader(port, watch)
@@ -947,15 +948,20 @@ def cmd_sweep(args):
             watch.learn(args.learn)
             if not watch.latest:
                 print("WARNING: heard nothing from the cluster; the bus watch can't find hits")
-        if args.check or args.check_only:
-            if not isinstance(transport, CanTransport):
-                raise SystemExit("--check works on CAN sweeps only")
+        sender = transport.sender if isinstance(transport, CanTransport) else wake_sender
+        if (args.check or args.check_only or not args.no_check) and sender is None:
+            if args.check or args.check_only:
+                raise SystemExit("--check on a J1708 sweep needs --wake (the CANable sends the engine frames)")
+            print("No bus check: a J1708 sweep without --wake has no CAN sender (add --wake --interface gs_usb --channel 0)")
+        elif args.check or args.check_only or not args.no_check:
             seconds = args.check_seconds or (6 if args.wake else 20)
-            ok = run_check(transport.sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
+            ok = run_check(sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
                            args.wake_rpm, args.recover, wake_vecu=int(args.wake_vecu, 16))
             if args.check_only:
                 return
-            if not ok and input("Check failed. Start the sweep anyway? [y/N] ").strip().lower() != "y":
+            if not ok and not args.ignore_check:
+                print("The bus check failed, so the sweep was not started. Fix the setup (see the CHECK lines above), "
+                      "or add --ignore-check to sweep anyway.")
                 return
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
                          transport=transport, watch=watch)
@@ -1019,7 +1025,9 @@ def main():
     sw.add_argument("--learn", type=float, default=30,
                     help="seconds to watch the cluster's output before the sweep, to learn what changes by itself")
     sw.add_argument("--check", action="store_true",
-                    help="CAN: before the sweep, send a known change (the tach) and check the camera/bus watch see it")
+                    help="the bus check now runs before every sweep by default; this flag is kept for --check-only runs")
+    sw.add_argument("--no-check", action="store_true", help="skip the bus check that normally runs before the sweep")
+    sw.add_argument("--ignore-check", action="store_true", help="sweep even if the bus check fails")
     sw.add_argument("--check-only", action="store_true", help="CAN: run --check and stop")
     sw.add_argument("--check-rpm", type=float, default=2000, help="engine speed for --check (default 2000)")
     sw.add_argument("--check-seconds", type=float, help="how long --check sends (default 6 with --wake, else 20)")
