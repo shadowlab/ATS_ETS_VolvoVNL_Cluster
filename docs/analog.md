@@ -147,6 +147,8 @@ list (PID 194) with `j1708_listen.py`.
   Byte 1 = level, 0.4 %/bit (7D ½, DB ~⅞, 5E ~⅜, 9C ~⅝). 00 alone, 01–0F
   without 00: no reading (needle red/holds). Different values from many
   SAs at once: no reading. Needle updates within seconds.
+  00 = 5E, 01 = DB: reads ~⅜, so the gauge shows SA 00's value; 01 only
+  has to be present.
 - 2026-11-04, fuel B:3 to B:1: open 4.545 V; with 100 Ω, 1.459 V. Pull-up
   ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
   MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
@@ -193,7 +195,8 @@ list (PID 194) with `j1708_listen.py`.
 - Fuel: confirm the MCP6002 + 2N7002 sink buffer holds B:3 at the table
   voltages (step 5, with the buffer in place of the box).
 - Air: confirm the MCP4728 reaches 4.89 V (180 psi) with VREF = VDD.
-- DEF: which value shows when 00 and 01 disagree; low-DEF lamp threshold.
+- DEF: low-DEF lamp threshold; whether any frame from SA 01 (not just FE56)
+  is enough.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
