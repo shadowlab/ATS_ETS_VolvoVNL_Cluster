@@ -97,9 +97,11 @@ list (PID 194) with `j1708_listen.py`.
    psi, the voltage where PID 118 FMI 4 clears, where any high fault (FMI 3)
    sets, and where "Low System Air Pressure" clears. Repeat on the rear
    pair (PID 117).
-   Decade box instead of the pot: 10 kΩ from supply to signal, box from
-   signal to B:1; V = Vs × R / (10k + R) (1.1 kΩ ≈ 0.5 V, 90 kΩ ≈ 4.5 V at
-   5 V). Record the meter voltage, not the box setting.
+   Decade box (0 to 9999 Ω) instead of the pot: 1 kΩ from supply to signal,
+   box from signal to B:1; V = Vs × R / (1k + R) (111 Ω ≈ 0.5 V, 1 kΩ ≈
+   2.5 V, 9 kΩ ≈ 4.5 V at 5 V). For 4.5 V to supply, swap: 1 kΩ from signal
+   to B:1, box from supply to signal (111 Ω ≈ 4.5 V, 263 Ω ≈ 4.75 V).
+   Record the meter voltage, not the box setting.
 3. **Fuel pull-up.** Measure B:3 open: V_open. Then put 100 Ω from B:3 to
    B:1 and measure V_100. Pull-up R = 100 × (V_open − V_100) / V_100.
    Check for pulsing with the meter's min/max mode or the logic analyzer.
