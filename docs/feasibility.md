@@ -7,8 +7,8 @@ temperature moving, then several weeks of trial and error for the rest.
 
 ## Status (October 2026)
 
-All hardware for bench testing is bought or on hand, and the full A/B/C
-pinout is known from the wiring diagram. Nothing has been powered up yet.
+All hardware for bench testing is in hand and the cluster has been powered
+on the bench; the full A/B/C pinout is from the wiring diagram.
 
 | Area | Known | Still open |
 |---|---|---|
