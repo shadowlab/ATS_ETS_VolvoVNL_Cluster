@@ -135,10 +135,10 @@ list (PID 194) with `j1708_listen.py`.
   From 50 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43), within a
   few psi. The low-air lamp clears at 1.933 V (≈ 61 psi on that line). At
   the low end the scale is steeper: 0 psi at 0.938 V to 50 psi at 1.610 V
-  (~75 psi/V). Two segments; the lookup table covers both. Firmware should use this table as a lookup with
+  (~75 psi/V). Two segments: firmware should use this table as a lookup
+  with interpolation, not the formula. No high fault seen at 4.889 V.
 - 2026-11-04, rear air gauge (B:14), same divider: 1 kΩ 2.432 V ~80 psi,
   4 kΩ 3.861 V ~140 psi. Same curve as front; one table serves both.
-  interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
 
