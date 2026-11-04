@@ -4,12 +4,12 @@
 
 | Part | Cost (USD) | Notes |
 |---|---|---|
-| Volvo VNL cluster 21844839-P01 (2012) | 144 | Ordered October 2026 |
+| Volvo VNL cluster 21844839-P01 (2012) | 144 | Arrived 2026-10-29 |
 | Matching harness set | ~97 | Separate source |
-| SN65HVD230 CAN transceiver module | ~5 | Ordered October 2026. The S3 has a CAN controller but no transceiver |
-| XY-485 RS-485 module (TVS, 3–30 V, auto direction) | ~8 | Ordered October 2026. J1708. Remove R9 ("121", 120 Ω). Bias R1/R2 ("472", 4.7 kΩ) are already right for J1708 |
-| CANable 2.0 | ~35 | Ordered October 2026. USB-CAN sniffer with SavvyCAN or python-can |
-| 8-channel logic analyzer | ~12 | Ordered October 2026. Decoding J1708 in PulseView |
+| SN65HVD230 CAN transceiver module | ~5 | The S3 has a CAN controller but no transceiver |
+| XY-485 RS-485 module (TVS, 3–30 V, auto direction) | ~8 | J1708. Remove R9 ("121", 120 Ω). Bias R1/R2 ("472", 4.7 kΩ) are already right for J1708 |
+| CANable 2.0 | ~35 | candleLight firmware, WinUSB. Its 120 Ω jumper must be fitted. Used with python-can |
+| 8-channel logic analyzer | ~12 | Lonely Binary, sigrok. Captures J1708 and the sweep marker |
 
 ## On hand
 
@@ -21,6 +21,7 @@
 | 120 Ω resistors | CAN1 termination (see [pinout](pinout.md#termination)) |
 | Resistance decade box | Find the range each analog gauge wants |
 | Inline fuses | Fused 12 V to the cluster |
+| Push button on GPIO41 | Marks a lamp or needle change during sweeps |
 
 ## Still to buy
 
@@ -34,8 +35,6 @@
 J1708 is RS-485-style but not plain RS-485: no 120 Ω terminator, bias
 resistors hold the idle state, and a sender drives only the active level.
 The XY-485's CD4069UB auto-direction inverter does exactly that from TX at 9600
-baud. Its transceiver is a 5 V MAX485 (rated 4.75–5.25 V) on the board's
-regulated rail; if that rail is 3.3 V it's running below spec, which is
-common at low speed, but revisit it if reception is flaky. While
-sending, you probably won't read back your own bytes, which is fine with only
-the ESP32 and the cluster on the bus.
+baud. Its transceiver is a 5 V MAX485 (rated 4.75–5.25 V) running from 3.3 V
+on the bench (pin 8 measured 3.294 V). Receive and send both work at 9600
+baud. Swapping A and B makes every frame bad.
