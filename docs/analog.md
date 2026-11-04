@@ -165,6 +165,18 @@ list (PID 194) with `j1708_listen.py`.
   running (fast fill at key-on); not with the heartbeat alone. While running
   it tracks slowly: changed to 33 Ω after key-on, needle moved to ½ in
   10 min. 120 Ω
+- 2026-11-04, fuel needle after A:3 cycle (V interpolated from the sweep):
+
+  | Box | V B:3 | Needle |
+  |---|---|---|
+  | 33 Ω | 0.653 | F |
+  | 85 Ω | ~1.32 | ½ |
+  | 135 Ω | ~1.76 | "a little over ¾" as reported; ¼ expected, to confirm |
+  | 190 Ω | ~2.12 | entering red (low) |
+  | 225 Ω | ~2.29 | E |
+  | 240 Ω | 2.368 | past E |
+
+  Sender: 33 Ω full, ~225 Ω empty. Not linear in ohms (½ at 85 Ω).
   (1.649 V) ≈ 5/8 from empty. Fits a 240 Ω empty, 33 Ω full sender
   ((240 − 120) / 207 = 0.58).
 
@@ -181,4 +193,4 @@ list (PID 194) with `j1708_listen.py`.
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
 |---|---|---|---|---|---|---|
-| B:3 | 4.545 V | ~212 Ω | | | | |
+| B:3 | 4.545 V | ~212 Ω | ~225 Ω | 85 Ω | 33 Ω | No (key-on fast fill, slow track) |
