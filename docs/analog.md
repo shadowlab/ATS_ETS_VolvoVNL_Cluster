@@ -139,6 +139,10 @@ list (PID 194) with `j1708_listen.py`.
   with interpolation, not the formula. No high fault seen at 4.889 V.
 - 2026-11-04, rear air gauge (B:14), same divider: 1 kΩ 2.432 V ~80 psi,
   4 kΩ 3.861 V ~140 psi. Same curve as front; one table serves both.
+- 2026-11-04, fuel B:3 to B:1: open 4.545 V; with 100 Ω, 1.459 V. Pull-up
+  ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
+  MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
+  buffer. 240-33 Ω sender would give about 2.42 V to 0.61 V.
 
 ## Left
 
@@ -153,4 +157,4 @@ list (PID 194) with `j1708_listen.py`.
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
 |---|---|---|---|---|---|---|
-| B:3 | | | | | | |
+| B:3 | 4.545 V | ~212 Ω | | | | |
