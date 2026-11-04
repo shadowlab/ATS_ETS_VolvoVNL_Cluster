@@ -24,6 +24,7 @@ import time
 import can
 
 import can_listen
+import can_send
 import canbus
 import j1939
 from can_send import build_message
@@ -54,6 +55,22 @@ def parse_vecu(text, group=16):
     if not all(turns):
         raise ValueError(f"no usable address in --vecu {text!r}")
     return turns
+
+
+def parse_extra(text):
+    """--extra "PGN:SA:DATA" into frames. SA may be a range, "00-FD", to send the
+    same frame from every address in it at once (skipping the cluster's own)."""
+    try:
+        pgn, sa, data = text.split(":", 2)
+        if "-" in sa:
+            lo, hi = (int(x, 16) for x in sa.split("-"))
+            sas = [a for a in range(lo, hi + 1) if a not in (CLUSTER_SA, 0xFE, 0xFF)]
+        else:
+            sas = [int(sa, 16)]
+        payload = can_send.parse_hex(data)
+        return [can_send.build_message(int(pgn, 16), a, payload) for a in sas]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected PGN:SA:DATA in hex (SA may be a range like 00-FD), got {text!r}")
 
 
 def describe_turn(sas):
@@ -219,13 +236,15 @@ def main():
     ap.add_argument("--kmh", type=float, default=0)
     ap.add_argument("--volts", type=float, default=13.8)
     ap.add_argument("--extra", action="append", default=[], metavar="PGN:SA:DATA",
-                    help="also send this frame (hex, as in can_listen --send) every --extra-period s; repeatable")
+                    help="also send this frame (hex, as in can_listen --send) every --extra-period s; repeatable. "
+                         "SA may be a range, e.g. FE56:00-FD:7D, to send it from every address at once")
     ap.add_argument("--extra-period", type=float, default=0.1, help="seconds between --extra frames (default 0.1)")
     ap.add_argument("--status", type=float, default=5, help="seconds between status lines (default 5)")
     args = ap.parse_args()
     try:
         turns = parse_vecu(args.vecu, args.group)
-        extras = [(f"extra {i + 1}", args.extra_period, can_listen.parse_send(text)) for i, text in enumerate(args.extra)]
+        extras = [(f"extra {i + 1}", args.extra_period, msg)
+                  for i, text in enumerate(args.extra) for msg in parse_extra(text)]
     except (ValueError, argparse.ArgumentTypeError) as exc:
         ap.error(str(exc))
     if len(turns) > 1:
@@ -248,8 +267,17 @@ def main():
                 vecus = turns[turn % len(turns)]
                 frames = heartbeats(vecus, args.rpm, args.kmh, args.volts) + extras
                 print(time.strftime("%H:%M:%S"), f"turn {turn % len(turns) + 1}/{len(turns)}: VECU at {describe_turn(vecus)}")
+                shown = set()
                 for name, period, msg in frames:
                     if len(vecus) > 1 and name[:4] in ("VEP1", "CCVS"):
+                        continue
+                    if name.startswith("extra") and name in shown:
+                        continue
+                    shown.add(name)
+                    count = sum(1 for other, _, _ in frames if other == name)
+                    if count > 1:
+                        print(f"  {name:7} every {period * 1000:g} ms  from {count} SAs  {bytes(msg.data).hex(' ')}"
+                              f"  {j1939.describe(msg.arbitration_id, bytes(msg.data))}")
                         continue
                     print(f"  {name:7} every {period * 1000:g} ms  {msg.arbitration_id:08X}  {bytes(msg.data).hex(' ')}"
                           f"  {j1939.describe(msg.arbitration_id, bytes(msg.data))}")

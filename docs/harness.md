@@ -52,16 +52,16 @@ All wires are white/orange.
 | Pin | Code | Function | Bench |
 |---|---|---|---|
 | B:1 | HA12A7 | Sensor ground (same as A:12) | Sensor return |
-| B:2 / B:18 | HB2A1 / HB18A1 | Brake application air pressure (B06AP) | Supply + signal |
+| B:2 / B:18 | HB2A1 / HB18A1 | Brake application air pressure (B06AP) | Signal B:2, supply B:18 (by pattern) |
 | B:3 | HB3A1 | Fuel level sender (B07) | Resistance to sensor ground |
-| B:6 / B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Supply + signal |
-| B:7 / B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Supply + signal |
+| B:6 / B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Signal B:6, supply B:17 (by pattern) |
+| B:7 / B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Signal B:7, supply B:19 (by pattern) |
 | B:9 | HB9A1 | Ambient air temperature (B22A) | Resistance to sensor ground |
 | B:10 | HB10A1 | Rear axle oil temp, front-rear | Optional |
 | B:11 | HB11A1 | Rear axle oil temp, rear-rear | Optional |
 | B:12 | HB12A1 | Gearbox oil temperature (B09) | Resistance to sensor ground |
-| B:13 / B:20 | HB13A1 / HB20A1 | Air pressure B-tank, front brakes (B06A) | Supply + signal |
-| B:14 / B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Supply + signal |
+| B:13 / B:20 | HB13A1 / HB20A1 | Air pressure B-tank, front brakes (B06A) | Signal B:13, supply B:20 (measured) |
+| B:14 / B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Signal B:14, supply B:21 (measured) |
 | B:15 | HB15A1 | Rear axle oil temp, center-rear | Optional |
 | B:23 | F02A2 | **ACC +12 V** through fuse F02 (radio fuse) | +12 V on a switch |
 | B:28 | F63C1 | Fifth wheel / lift axle indicator (S88) | Optional: likely +12 V when active (fused F circuit) |

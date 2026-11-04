@@ -34,6 +34,7 @@ pop-up for this; it has not appeared on the bench.
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
+| [`docs/analog.md`](docs/analog.md) | Fuel, air and DEF gauge inputs, measured needle maps, MCP4728 drive |
 | [`firmware/`](firmware/README.md) | ESP32-S3 firmware: J1708 to USB bridge and a bench button on GPIO41 (stage 1 only) |
 | [`tools/`](tools/) | Bus listeners and senders, the engine heartbeat, the sweep (camera, bus watch, button), logic analyzer capture and cross-check |
 
@@ -57,7 +58,7 @@ The goal is every gauge and telltale the cluster supports working in game.
 Details in [docs/plan.md](docs/plan.md).
 
 1. **Bench bring-up and listen:** done.
-2. **Sweep and map:** in progress. Standard PGNs done; J1587 PIDs partly swept; proprietary CAN range and analog ranges still to do.
+2. **Sweep and map:** in progress. Standard PGNs done; J1587 PIDs partly swept; analog gauges (fuel, air) and DEF mapped; proprietary CAN range still to do.
 3. **ESP32-S3 firmware:** CAN1 and J1708 traffic, analog stand-ins, values over USB serial.
 4. **Game link:** SimHub or scs-sdk bridge from ATS/ETS2 telemetry.
 

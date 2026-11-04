@@ -27,7 +27,7 @@
 
 | Part | Approx. cost | Use |
 |---|---|---|
-| X9C102/103 digital pots or MCP4728 DAC | $10 | Analog gauge stand-ins, chosen after measuring ranges with the decade box |
+| MCP4728 DAC + BSS138 I2C level shifter | $10 | Fuel and both brake air gauges ([analog.md](analog.md)); MCP6002 + 2N7002 if fuel needs a sink buffer |
 | Toggle switches, twisted pair wire (if not on hand) | $5–10 | Separate switches for A:1 and A:3, bus wiring |
 
 ## Notes on the J1708 transceiver

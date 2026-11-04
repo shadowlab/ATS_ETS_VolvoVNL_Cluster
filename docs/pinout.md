@@ -29,11 +29,11 @@ A, B, C below).
 |---|---|---|---|
 | B:1 | HA12A7 | Sensor ground (same as A:12) | Return for the sensor stand-ins |
 | B:3 | HB3A1 | Fuel level sender (B07) | Resistance to sensor ground |
-| B:2 + B:18 | HB2A1 / HB18A1 | Brake application air pressure (B06AP) | Supply + signal |
-| B:13 + B:20 | HB13A1 / HB20A1 | Air pressure B-tank, front brakes (B06A) | Supply + signal |
-| B:14 + B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Supply + signal |
-| B:6 + B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Supply + signal |
-| B:7 + B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Supply + signal |
+| B:2 + B:18 | HB2A1 / HB18A1 | Brake application air pressure (B06AP) | Signal B:2, supply B:18 (by pattern) |
+| B:13 + B:20 | HB13A1 / HB20A1 | Air pressure B-tank, front brakes (B06A) | Signal B:13, supply B:20 (measured) |
+| B:14 + B:21 | HB14A1 / HB21A1 | Air pressure A-tank, rear brakes (B06B) | Signal B:14, supply B:21 (measured) |
+| B:6 + B:17 | HB6A1 / HB17A1 | Rear suspension air pressure (B58R) | Signal B:6, supply B:17 (by pattern) |
+| B:7 + B:19 | HB7A1 / HB19A1 | Front axle suspension air pressure (B56) | Signal B:7, supply B:19 (by pattern) |
 | B:9 | HB9A1 | Ambient air temperature (B22A) | Resistance to sensor ground |
 | B:12 | HB12A1 | Gearbox oil temperature (B09) | Resistance to sensor ground |
 | B:10 / B:11 / B:15 | HB10A1 / HB11A1 / HB15A1 | Rear axle oil temps: front-rear, rear-rear, center-rear | Optional |
@@ -41,13 +41,12 @@ A, B, C below).
 | B:28 | F63C1 | Fifth wheel / lift axle indicator input (switch S88) | Optional: likely +12 V when active (fused F circuit) |
 
 **Air pressure sensors are 3-wire:** sensor ground plus two cluster pins, one
-a supply and one the signal. The diagram doesn't say which is which, but the
-pattern is the same on all five: sensor pin A is sensor ground, sensor pin C
-goes to B:2 / B:6 / B:7 / B:13 / B:14, and sensor pin B goes to B:17 / B:18 /
-B:19 / B:20 / B:21. So measuring one sensor's pair tells you all five. With the
-cluster powered, the pin reading about 5 V is the supply; the other is the
-signal, so a stand-in is a voltage on the signal pin between 0 V and that
-supply.
+a supply and one the signal. Sensor pin A is sensor ground, sensor pin C
+goes to B:2 / B:6 / B:7 / B:13 / B:14 (**signal**), and sensor pin B goes to
+B:17 / B:18 / B:19 / B:20 / B:21 (**supply**). Measured on the bench for front
+(B:13 signal, B:20 supply) and rear (B:14 signal, B:21 supply); the other
+three follow the same pattern. A stand-in is a voltage on the signal pin
+between 0 V and the supply.
 
 ## Connector C
 
