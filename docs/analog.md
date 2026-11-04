@@ -171,7 +171,7 @@ list (PID 194) with `j1708_listen.py`.
   |---|---|---|
   | 33 Ω | 0.653 | F |
   | 85 Ω | ~1.32 | ½ |
-  | 135 Ω | ~1.76 | "a little over ¾" as reported; ¼ expected, to confirm |
+  | 135 Ω | ~1.76 | a little over ¼ |
   | 190 Ω | ~2.12 | entering red (low) |
   | 225 Ω | ~2.29 | E |
   | 240 Ω | 2.368 | past E |
@@ -182,7 +182,9 @@ list (PID 194) with `j1708_listen.py`.
 
 ## Left
 
-- Steps 1 to 5 above; fill in the tables below.
+- Fuel: confirm the MCP6002 + 2N7002 sink buffer holds B:3 at the table
+  voltages (step 5, with the buffer in place of the box).
+- Air: confirm the MCP4728 reaches 4.89 V (180 psi) with VREF = VDD.
 - DEF: send AT1T1I with SPN 1761 (byte 1, 0.4 %/bit) from source 0x3D
   (aftertreatment), then 0x00, and watch the DEF gauge.
 
