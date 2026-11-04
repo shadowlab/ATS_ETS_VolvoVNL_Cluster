@@ -161,6 +161,9 @@ list (PID 194) with `j1708_listen.py`.
   Fuel needle did not move at any step. Apparent pull-up rises from ~197 Ω
   (33 Ω) to ~240 Ω (500 Ω), so it isn't a plain resistor; drive by voltage
   from this table.
+- Needle responded after the heartbeat/settle/key-cycle steps: 120 Ω
+  (1.649 V) ≈ 5/8 from empty. Fits a 240 Ω empty, 33 Ω full sender
+  ((240 − 120) / 207 = 0.58).
 
 ## Left
 
