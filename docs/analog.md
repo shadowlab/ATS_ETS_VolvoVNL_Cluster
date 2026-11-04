@@ -133,8 +133,9 @@ list (PID 194) with `j1708_listen.py`.
 
   From 50 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43), within a
   few psi. The low-air lamp clears at 1.933 V (≈ 61 psi on that line). At
-  0.973 V the needle reads 0 where the line says ~22, so below ~1.6 V it is
-  a dead zone or the needle stop. Firmware should use this table as a lookup with
+  0.973 V the needle reads 0 where the line says ~22; 1.610 V (50 psi) is on
+  the line. Where the needle leaves the line between 0.97 and 1.6 V is not
+  yet measured (try 300 and 400 Ω). Firmware should use this table as a lookup with
   interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
