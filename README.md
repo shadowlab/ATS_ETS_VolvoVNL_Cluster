@@ -20,7 +20,7 @@ Simulator   ──────► SimHub     ────► bridge    ───
 |---|---|---|
 | Main bus | HS-CAN 500k, 11-bit IDs | J1939 CAN1 250k, 29-bit IDs |
 | Second bus | MS-CAN 125k | J1708/J1587, 9600 baud RS-485-style serial |
-| Analog inputs | Fuel sender | Fuel level and air pressures on connector C |
+| Analog inputs | Fuel sender | Fuel level and air pressures on connector B |
 | Known message map | Partly public | Standard J1939/J1587 for engine gauges; telltales are Volvo proprietary |
 | Finding unknown messages | Blind 11-bit sweep | Structured sweep (see [sweep plan](docs/sweep_plan.md)) |
 
@@ -40,6 +40,7 @@ the bridge has to fake that ECU too.
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
+| [`docs/analog.md`](docs/analog.md) | Fuel, air and DEF gauge inputs, MCP4728 drive, bench procedure for the needle mapping |
 | `firmware/` | ESP32-S3 bridge firmware (to come) |
 | [`tools/`](tools/) | Bus listeners, a frame sender and the camera-watched sweep |
 

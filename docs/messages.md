@@ -18,7 +18,7 @@ against the paid SAE documents.
 | DEF level | AT1T1I 65110 (0xFE56), SPN 1761 | n/a | Yes (AdBlue) |
 | Parking brake, cruise | CCVS1 65265 | n/a | Yes |
 | Check engine / stop lamps | DM1 65226 (0xFECA) lamp bits | n/a | Partly |
-| Fuel level, air pressures | Analog on connector B | 96, 117, 118 | Yes |
+| Fuel level, air pressures | Analog on connector B ([analog.md](analog.md)) | 96, 117, 118 | Yes |
 | Airbag (SRS) lamp | n/a: the SRS module (A15) is on J1587 only | MID 232, PIDs unknown | No |
 | Turn signals, high beam, other telltales | Unknown, likely proprietary | Unknown | Yes |
 
