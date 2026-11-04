@@ -139,6 +139,8 @@ list (PID 194) with `j1708_listen.py`.
   with interpolation, not the formula. No high fault seen at 4.889 V.
 - 2026-11-04, rear air gauge (B:14), same divider: 1 kΩ 2.432 V ~80 psi,
   4 kΩ 3.861 V ~140 psi. Same curve as front; one table serves both.
+- 2026-11-04, DEF: FE56 from SA 3D, `7D 41` (50 %), with can_wake heartbeat
+  and A:3 cycle: no needle, no new fault.
 - 2026-11-04, fuel B:3 to B:1: open 4.545 V; with 100 Ω, 1.459 V. Pull-up
   ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
   MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
@@ -185,8 +187,8 @@ list (PID 194) with `j1708_listen.py`.
 - Fuel: confirm the MCP6002 + 2N7002 sink buffer holds B:3 at the table
   voltages (step 5, with the buffer in place of the box).
 - Air: confirm the MCP4728 reaches 4.89 V (180 psi) with VREF = VDD.
-- DEF: send AT1T1I with SPN 1761 (byte 1, 0.4 %/bit) from source 0x3D
-  (aftertreatment), then 0x00, and watch the DEF gauge.
+- DEF: J1708 page-2 PID 22 (`80 FF 16 7D`, then MID 90); cluster logs
+  page-2 PID 22 FMI 9 (abnormal update rate). Then FE56 source sweep.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
