@@ -15,7 +15,7 @@ against the paid SAE documents.
 | Oil pressure | EFL/P1 65263 (0xFEEF), SPN 100 | 100 | Yes |
 | Battery voltage | VEP1 65271 (0xFEF7), SPN 168 | 168 | Yes |
 | Odometer | VDHR 65217 (0xFEC1), SPN 917 | 245 | Yes |
-| DEF level | AT1T1I 65110 (0xFE56), SPN 1761 | n/a | Yes (AdBlue) |
+| DEF level | AT1T1I 65110 (0xFE56), SPN 1761, byte 1 0.4 %/bit; **confirmed, needs SA 00 and SA 01** | n/a | Yes (AdBlue) |
 | Parking brake, cruise | CCVS1 65265 | n/a | Yes |
 | Check engine / stop lamps | DM1 65226 (0xFECA) lamp bits | n/a | Partly |
 | Fuel level, air pressures | Analog on connector B ([analog.md](analog.md)) | 96, 117, 118 | Yes |

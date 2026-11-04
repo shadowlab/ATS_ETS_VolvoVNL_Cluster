@@ -7,7 +7,7 @@ Inputs for DEF level, fuel level and the two brake air gauges. Pins are from
 
 | Gauge | Input | Pins (connector B) | Sensor type | Cluster fault when unwired |
 |---|---|---|---|---|
-| DEF level | **No wire.** J1939 AT1T1I, PGN 65110 (0xFE56), SPN 1761, % | none | Network | none seen |
+| DEF level | **No wire.** J1939 AT1T1I, PGN 65110 (0xFE56), SPN 1761, byte 1, 0.4 %/bit, from **SA 00 and SA 01** | none | Network | none seen |
 | Fuel level | Sender B07 | B:3 signal, B:1 (or A:12) sensor ground | Resistive, to sensor ground | PID 96 FMI 5 (open circuit) |
 | Front air (secondary, B-tank, front brakes) | Sensor B06A | B:13 signal, B:20 supply, B:1 ground | 3-wire, voltage out | PID 118 FMI 4 (voltage low) |
 | Rear air (primary, A-tank, rear brakes) | Sensor B06B | B:14 signal, B:21 supply, B:1 ground | 3-wire, voltage out | PID 117 FMI 4 (voltage low) |
@@ -143,6 +143,10 @@ list (PID 194) with `j1708_listen.py`.
   and A:3 cycle: no needle, no new fault.
 - 2026-11-04, DEF: J1708 page-2 PID 22 = 7D (`80 FF 16 7D`, then `90 FF 16 7D`),
   1 s, with A:3 cycle: no needle; page-2 PID 22 FMI 9 unchanged.
+- 2026-11-04, DEF found: FE56 must come from **both SA 00 and SA 01**.
+  Byte 1 = level, 0.4 %/bit (7D ½, DB ~⅞, 5E ~⅜, 9C ~⅝). 00 alone, 01–0F
+  without 00: no reading (needle red/holds). Different values from many
+  SAs at once: no reading. Needle updates within seconds.
 - 2026-11-04, fuel B:3 to B:1: open 4.545 V; with 100 Ω, 1.459 V. Pull-up
   ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
   MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
@@ -189,9 +193,7 @@ list (PID 194) with `j1708_listen.py`.
 - Fuel: confirm the MCP6002 + 2N7002 sink buffer holds B:3 at the table
   voltages (step 5, with the buffer in place of the box).
 - Air: confirm the MCP4728 reaches 4.89 V (180 psi) with VREF = VDD.
-- DEF: FE56 from every SA at once (`can_wake.py --extra "FE56:00-FD:7D 41"
-  --extra-period 1`), A:3 cycle; if it moves, halve the range. Then CAN
-  proprietary sweep (FF00-FFFF) from 00 and 3D watching the DEF needle.
+- DEF: which value shows when 00 and 01 disagree; low-DEF lamp threshold.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
