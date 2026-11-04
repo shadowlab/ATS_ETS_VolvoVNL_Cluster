@@ -121,7 +121,8 @@ list (PID 194) with `j1708_listen.py`.
 
   | Box | V signal | Needle (psi) |
   |---|---|---|
-  | 250 Ω | 0.973 | 0 |
+  | 240 Ω | 0.938 | 0 (true zero) |
+  | 250 Ω | 0.973 | ~0 |
   | 500 Ω | 1.610 | ~50 |
   | 670 Ω | 1.933 | low-air lamp off |
   | 750 Ω | 2.07 | ~70 |
@@ -133,9 +134,8 @@ list (PID 194) with `j1708_listen.py`.
 
   From 50 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43), within a
   few psi. The low-air lamp clears at 1.933 V (≈ 61 psi on that line). At
-  0.973 V the needle reads 0 where the line says ~22; 1.610 V (50 psi) is on
-  the line. Where the needle leaves the line between 0.97 and 1.6 V is not
-  yet measured (try 300 and 400 Ω). Firmware should use this table as a lookup with
+  the low end the scale is steeper: 0 psi at 0.938 V to 50 psi at 1.610 V
+  (~75 psi/V). Two segments; the lookup table covers both. Firmware should use this table as a lookup with
   interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
@@ -146,7 +146,7 @@ list (PID 194) with `j1708_listen.py`.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
-| Front | B:20 | B:13 | ≤0.97 | ~1.9 | ~3.1 | 4.89 | 1.933 V | none at 4.89 |
+| Front | B:20 | B:13 | 0.938 | ~1.9 | ~3.1 | 4.89 | 1.933 V | none at 4.89 |
 | Rear | B:21 | B:14 | | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
