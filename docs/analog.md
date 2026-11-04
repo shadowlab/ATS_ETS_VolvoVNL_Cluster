@@ -9,15 +9,15 @@ Inputs for DEF level, fuel level and the two brake air gauges. Pins are from
 |---|---|---|---|---|
 | DEF level | **No wire.** J1939 AT1T1I, PGN 65110 (0xFE56), SPN 1761, % | none | Network | none seen |
 | Fuel level | Sender B07 | B:3 signal, B:1 (or A:12) sensor ground | Resistive, to sensor ground | PID 96 FMI 5 (open circuit) |
-| Front air (secondary, B-tank, front brakes) | Sensor B06A | B:13 + B:20, B:1 ground | 3-wire, voltage out | PID 118 FMI 4 (voltage low) |
-| Rear air (primary, A-tank, rear brakes) | Sensor B06B | B:14 + B:21, B:1 ground | 3-wire, voltage out | PID 117 FMI 4 (voltage low) |
+| Front air (secondary, B-tank, front brakes) | Sensor B06A | B:13 signal, B:20 supply, B:1 ground | 3-wire, voltage out | PID 118 FMI 4 (voltage low) |
+| Rear air (primary, A-tank, rear brakes) | Sensor B06B | B:14 signal, B:21 supply, B:1 ground | 3-wire, voltage out | PID 117 FMI 4 (voltage low) |
 
 - The cluster sends AIR1 (PGN 65198) itself, so air comes from the wired
   sensors, not the bus.
 - FMI 4 with nothing on the pin means the air signal input is pulled low.
   FMI 5 on fuel means B:3 is pulled up and reads "open" with no sender.
-- Which pin of each air pair is the 5 V supply is not known (one pair measured
-  tells all; see pinout.md).
+- Air supply pins measured: B:20 (front) and B:21 (rear); signals B:13 and
+  B:14. Supply voltage not yet recorded.
 - Expected but unconfirmed: air sensors are ratiometric 0.5 to 4.5 V on a 5 V
   supply, 0 to 150 psi. Fuel sender range is unknown (common heavy-truck
   ranges are 240-33 Ω and 0-90 Ω); measure it.
@@ -31,8 +31,8 @@ covers them with one spare (brake application or a suspension gauge).
 
 | Channel | Gauge | Drive |
 |---|---|---|
-| A | Front air, B:20 or B:13 (signal pin) | DAC voltage straight to the signal pin |
-| B | Rear air, B:21 or B:14 (signal pin) | DAC voltage straight to the signal pin |
+| A | Front air, B:13 | DAC voltage straight to the signal pin |
+| B | Rear air, B:14 | DAC voltage straight to the signal pin |
 | C | Fuel, B:3 | DAC voltage, through a sink buffer if direct drive fails |
 | D | Spare | |
 
@@ -89,9 +89,8 @@ Cluster powered (A:1, A:3, B:23) with `can_wake.py` running so the needles
 are live. Meter negative on B:1. Watch the needles and the cluster's fault
 list (PID 194) with `j1708_listen.py`.
 
-1. **Air supply pin.** With nothing on the air pins, measure B:13, B:20,
-   B:14, B:21. The one at about 5 V in each pair is the supply; the other is
-   the signal. Write down the exact supply voltage.
+1. **Air supply pin.** Done: B:20 / B:21 supply, B:13 / B:14 signal. Still
+   to record: the exact supply voltage.
 2. **Air mapping.** 10 kΩ pot across supply and B:1, wiper to the front
    signal pin through 1 kΩ. Step 0 to supply in 0.25 V steps. Record needle
    psi, the voltage where PID 118 FMI 4 clears, where any high fault (FMI 3)
@@ -116,7 +115,7 @@ list (PID 194) with `j1708_listen.py`.
 
 ## Tried
 
-Nothing yet.
+- 2026-11-04: air supply/signal pins identified (table above).
 
 ## Left
 
@@ -126,8 +125,8 @@ Nothing yet.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
-| Front | | | | | | | | |
-| Rear | | | | | | | | |
+| Front | B:20 | B:13 | | | | | | |
+| Rear | B:21 | B:14 | | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
 |---|---|---|---|---|---|---|
