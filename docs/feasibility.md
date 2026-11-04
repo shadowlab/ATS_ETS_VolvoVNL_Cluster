@@ -81,8 +81,7 @@ under the original $360 to $650 estimate.
 
 ## ATS side
 
-Solved. SCS's Telemetry SDK feeds either **SimHub** (least PC-side code,
-reused from the Mazda build) or the **scs-sdk-plugin** (RenCloud fork) shared
+Solved. SCS's Telemetry SDK feeds either **SimHub** (least PC-side code) or the **scs-sdk-plugin** (RenCloud fork) shared
 memory, readable from Python with `truck-telemetry`. Between them they expose
 RPM, speed, odometer, cruise, parking brake, fuel, AdBlue, oil pressure and
 temperature, coolant, air pressure and warning, battery voltage, blinkers,

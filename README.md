@@ -13,18 +13,9 @@ Simulator   ──────► SimHub     ────► bridge    ───
 > (`tools/can_wake.py`) moves the tach, oil pressure and coolant gauges; the
 > parking brake and "i" lamps are found. The speedo, odometer and the other
 > lamps are still open. See [messages.md](docs/messages.md) for what is
-> confirmed. This is the sequel to
-> [ATS_ETS_Mazda3_Cluster](https://github.com/shadowlab/ATS_ETS_Mazda3_Cluster).
+> confirmed.
 
-## How it differs from the Mazda 3 build
-
-| | Mazda 3 (2005) | Volvo VNL (2012) |
-|---|---|---|
-| Main bus | HS-CAN 500k, 11-bit IDs | J1939 CAN1 250k, 29-bit IDs |
-| Second bus | MS-CAN 125k | J1708/J1587, 9600 baud RS-485-style serial |
-| Analog inputs | Fuel sender | Fuel level and air pressures on connector B |
-| Known message map | Partly public | Standard J1939/J1587 for engine gauges; telltales are Volvo proprietary |
-| Finding unknown messages | Blind 11-bit sweep | Structured sweep (see [sweep plan](docs/sweep_plan.md)) |
+## The vehicle ECU
 
 The cluster also expects to hear from the truck's vehicle ECU (VECU, MID 144).
 On the bench it logs the VECU as lost (SID 201), so the bridge may have to
