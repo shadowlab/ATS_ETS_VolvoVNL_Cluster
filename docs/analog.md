@@ -116,6 +116,22 @@ list (PID 194) with `j1708_listen.py`.
 ## Tried
 
 - 2026-11-04: air supply/signal pins identified (table above).
+- 2026-11-04, one air gauge, decade box divider (1 kΩ from supply to
+  signal). Supply open-circuit 4.889 V.
+
+  | Box | V signal | Needle (psi) |
+  |---|---|---|
+  | 250 Ω | 0.973 | 0 |
+  | 1 kΩ | 2.412 | ~80 |
+  | 2 kΩ | 3.214 | ~115 |
+  | 4 kΩ | 3.863 | 140 |
+  | 9999 Ω | 4.402 | ~160 |
+  | open | 4.889 | 180 (full scale) |
+
+  From 80 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43). Below
+  80 psi it isn't linear (0.973 V reads 0, the line says ~22), so the low end
+  needs more points. Firmware should use this table as a lookup with
+  interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
 
@@ -125,7 +141,7 @@ list (PID 194) with `j1708_listen.py`.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
-| Front | B:20 | B:13 | | | | | | |
+| Front | B:20 | B:13 | ≤0.97 | | ~3.1 | 4.89 | | none at 4.89 |
 | Rear | B:21 | B:14 | | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
