@@ -116,21 +116,25 @@ list (PID 194) with `j1708_listen.py`.
 ## Tried
 
 - 2026-11-04: air supply/signal pins identified (table above).
-- 2026-11-04, one air gauge, decade box divider (1 kΩ from supply to
+- 2026-11-04, front air gauge (B:13), decade box divider (1 kΩ from supply to
   signal). Supply open-circuit 4.889 V.
 
   | Box | V signal | Needle (psi) |
   |---|---|---|
   | 250 Ω | 0.973 | 0 |
+  | 500 Ω | 1.610 | ~50 |
+  | 670 Ω | 1.933 | low-air lamp off |
+  | 750 Ω | 2.07 | ~70 |
   | 1 kΩ | 2.412 | ~80 |
   | 2 kΩ | 3.214 | ~115 |
   | 4 kΩ | 3.863 | 140 |
   | 9999 Ω | 4.402 | ~160 |
   | open | 4.889 | 180 (full scale) |
 
-  From 80 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43). Below
-  80 psi it isn't linear (0.973 V reads 0, the line says ~22), so the low end
-  needs more points. Firmware should use this table as a lookup with
+  From 50 to 180 psi: about 40 psi/V, psi ≈ 40.5 × (V − 0.43), within a
+  few psi. The low-air lamp clears at 1.933 V (≈ 61 psi on that line). At
+  0.973 V the needle reads 0 where the line says ~22, so below ~1.6 V it is
+  a dead zone or the needle stop. Firmware should use this table as a lookup with
   interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
@@ -141,7 +145,7 @@ list (PID 194) with `j1708_listen.py`.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
-| Front | B:20 | B:13 | ≤0.97 | | ~3.1 | 4.89 | | none at 4.89 |
+| Front | B:20 | B:13 | ≤0.97 | ~1.9 | ~3.1 | 4.89 | 1.933 V | none at 4.89 |
 | Rear | B:21 | B:14 | | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
