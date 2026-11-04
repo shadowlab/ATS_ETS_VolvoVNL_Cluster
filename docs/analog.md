@@ -143,6 +143,24 @@ list (PID 194) with `j1708_listen.py`.
   ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
   MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
   buffer. 240-33 Ω sender would give about 2.42 V to 0.61 V.
+- 2026-11-04, fuel sweep, box from B:3 to B:1:
+
+  | Box | V B:3 |
+  |---|---|
+  | 0 Ω | white "I" lamp on (short) |
+  | 33 Ω | 0.653 |
+  | 60 Ω | 1.031 |
+  | 90 Ω | 1.373 |
+  | 120 Ω | 1.649 |
+  | 160 Ω | 1.942 |
+  | 200 Ω | 2.178 |
+  | 240 Ω | 2.368 |
+  | 300 Ω | 2.656 |
+  | 500 Ω | 3.069 |
+
+  Fuel needle did not move at any step. Apparent pull-up rises from ~197 Ω
+  (33 Ω) to ~240 Ω (500 Ω), so it isn't a plain resistor; drive by voltage
+  from this table.
 
 ## Left
 
