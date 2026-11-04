@@ -85,16 +85,17 @@ with the radio. It is the only hardwired key-position input. No pin
 connects to the ignition (IGN) rail, so the cluster most likely learns
 RUN/START over the data links from the VECU.
 
-On the bench, put +12 V on B:23 through a switch so you can simulate key
-off and key at ACC. If the cluster still doesn't wake with A:1, A:3 and
-B:23 powered, start sending J1939 and J1587 traffic before deciding it's
-dead.
+Bench result: the cluster powers up and talks on CAN1 and J1708 with A:1
+and A:3 alone; B:23 made no visible difference.
 
 ## Termination
 
 Measure CAN-H to CAN-L (A:15 to A:16) with power off. About 120 Ω means the
 cluster terminates one end, so add one 120 Ω at the ESP32 end. Open circuit
 means add 120 Ω at both ends. J1708 uses **no** terminator.
+
+Bench result: the cluster alone reads about 60-70 Ω, and the CANable's
+120 Ω jumper still had to be fitted for traffic to work.
 
 ## First power-up
 

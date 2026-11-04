@@ -12,12 +12,14 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `j1708_selftest.py` | Checks the J1708 wiring through the ESP32 bridge: listens for valid frames and the cluster (MID 140), then sends test frames and looks for an echo |
 | `la_capture.py` | Captures with the 8-channel logic analyzer through sigrok-cli, saves a PulseView file, and decodes J1708 to CSV; `selftest` checks it through the ESP32 bridge with no cluster |
 | `flash_ci.ps1` | Flashes the ESP32-S3 J1708 bridge from a CI build and logs J1708 for a few seconds ([firmware/](../firmware/README.md)) |
+| `button_test.py` | Checks the ESP32's GPIO41 "I saw a change" button reaches the PC once per press |
 | `sweep_crosscheck.py` | Finds sweep candidates that changed the cluster's own CAN/J1708 traffic, from the logs, without the camera |
-| `sweep_watch.py` | Unattended J1939 or J1587 sweep with a camera watching the cluster; logs hits with before and after pictures |
+| `can_wake.py` | Plays a simulated truck: engine and VECU heartbeats, key-on, VECU address cycling |
+| `sweep_watch.py` | J1939 or J1587 sweep, with engine heartbeat and a bus check first; camera, bus watch or the GPIO41 button catch changes; logs hits |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
-| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch` |
+| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch test_sweep_crosscheck test_button` |
 
-## Before the cluster arrives
+## Self-test without the cluster
 
 Check the CANable and the PC side with nothing wired to it. Leave the
 CANable's 120 Ω jumper as it is.
@@ -325,7 +327,7 @@ If the cluster needs to hear an engine to stay awake, add
 `--background F004:00:FFFFFF401FFFFFFF` (repeatable, CAN only) to keep
 sending a frame through the whole run.
 
-`--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
+Every sweep with a CAN sender (CAN sweeps, or J1708 sweeps with `--wake`) first runs a bus check: it asks the cluster for its address claim, sends a tach change, and (with `--j1708-port` or a J1708 sweep) pauses the engine frames to see the cluster's fault report change. The sweep only starts if it passes; `--ignore-check` sweeps anyway, `--no-check` skips it, `--check-only` runs just the check. The engine heartbeat is now on by default for CAN sweeps (`--no-wake` turns it off) and starts 5 s before the first candidate, since the cluster ignores other frames until it hears an engine. For a J1708 sweep add `--wake --interface gs_usb --channel 0` and the CANable sends it while the serial port sweeps. `--wake` runs can_wake's whole engine heartbeat underneath the sweep (the
 frames that bring the tach, oil, coolant and check-engine lamp to life,
 2026-11-03), so a sweep can look for gauges that only work with the engine
 "running", like the speedometer. Fill with a mid-range byte rather than 00/FF,
@@ -380,6 +382,15 @@ python sweep_watch.py sweep --interface gs_usb --channel 0 --camera 0 --pgns FF2
 ```
 
 Copy confirmed results into [docs/messages.md](../docs/messages.md).
+
+### Marking what you see with the button
+
+With a button on GPIO41 (see firmware/README.md) and the J1708 bridge
+connected, press it whenever a lamp or needle changes. A sweep prints
+`BUTTON #n: sending ... for x s, before that ...` and appends the same to
+`buttons.csv` in the sweep folder; a lamp usually reacts a moment after the
+send that caused it, so look at the candidate before the one on the wire too.
+Test the button on its own first: `python button_test.py --port COM7 --presses 5`.
 
 ### Second opinion without the camera
 
