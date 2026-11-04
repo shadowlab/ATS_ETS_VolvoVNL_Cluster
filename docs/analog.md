@@ -162,7 +162,9 @@ list (PID 194) with `j1708_listen.py`.
   (33 Ω) to ~240 Ω (500 Ω), so it isn't a plain resistor; drive by voltage
   from this table.
 - Needle moves only after cycling A:3 with the `can_wake.py` heartbeat
-  running (fast fill at key-on); not with the heartbeat alone. 120 Ω
+  running (fast fill at key-on); not with the heartbeat alone. While running
+  it tracks slowly: changed to 33 Ω after key-on, needle moved to ½ in
+  10 min. 120 Ω
   (1.649 V) ≈ 5/8 from empty. Fits a 240 Ω empty, 33 Ω full sender
   ((240 − 120) / 207 = 0.58).
 
