@@ -136,6 +136,8 @@ list (PID 194) with `j1708_listen.py`.
   few psi. The low-air lamp clears at 1.933 V (≈ 61 psi on that line). At
   the low end the scale is steeper: 0 psi at 0.938 V to 50 psi at 1.610 V
   (~75 psi/V). Two segments; the lookup table covers both. Firmware should use this table as a lookup with
+- 2026-11-04, rear air gauge (B:14), same divider: 1 kΩ 2.432 V ~80 psi,
+  4 kΩ 3.861 V ~140 psi. Same curve as front; one table serves both.
   interpolation, not the formula. No high fault seen at 4.889 V.
 
 ## Left
@@ -147,7 +149,7 @@ list (PID 194) with `j1708_listen.py`.
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
 | Front | B:20 | B:13 | 0.938 | ~1.9 | ~3.1 | 4.89 | 1.933 V | none at 4.89 |
-| Rear | B:21 | B:14 | | | | | | |
+| Rear | B:21 | B:14 | same as front | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
 |---|---|---|---|---|---|---|
