@@ -503,12 +503,44 @@ def describe_changes(watch, keys, snapshot):
     return "; ".join(parts)
 
 
-class J1708Reader:
-    """Reads the cluster's J1708 output from the ESP32 bridge into a BusWatch."""
+BUTTON_FIELDS = ["time", "press", "now_sending", "since_s", "before_that", "since_s2"]
 
-    def __init__(self, port, watch, gap=0.004):
+
+class ButtonLog:
+    """Notes which candidates were being sent when you pressed the ESP32's button (GPIO41).
+
+    A lamp usually reacts a moment after the send that caused it, so both the
+    candidate on the wire and the one before it are recorded."""
+
+    def __init__(self, out_dir, log=print):
+        self.path = os.path.join(out_dir, "buttons.csv")
+        self.log = log
+        self.current = self.previous = None   # (label, sent_at)
+        self.presses = 0
+
+    def sending(self, label):
+        self.previous, self.current = self.current, (label, time.time())
+
+    def press(self, seq):
+        now = time.time()
+        (cur, cur_t), (prev, prev_t) = [(c or ("", now)) for c in (self.current, self.previous)]
+        self.presses += 1
+        append_row(self.path, BUTTON_FIELDS, {
+            "time": datetime.now().isoformat(timespec="seconds"), "press": seq, "now_sending": cur,
+            "since_s": f"{now - cur_t:.1f}", "before_that": prev, "since_s2": f"{now - prev_t:.1f}"})
+        self.log(f"BUTTON #{seq} at {datetime.now().strftime('%H:%M:%S')}: sending {cur or '(nothing yet)'} "
+                 f"for {now - cur_t:.1f} s, before that {prev or '(nothing)'}")
+
+
+class J1708Reader:
+    """Reads the cluster's J1708 output from the ESP32 bridge into a BusWatch.
+
+    Button frames from the ESP32 (MID 254) go to on_button instead of the watch."""
+
+    def __init__(self, port, watch, gap=0.004, on_button=None):
         self.port = port
         self.watch = watch
+        self.on_button = on_button
         self.gap = gap
         self.running = True
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -525,7 +557,12 @@ class J1708Reader:
                 continue
             if chunk and time.time() - last >= self.gap:
                 for frame in j1587.split_frames(bytes(chunk)) or []:
-                    self.watch.observe_j1708(frame)
+                    seq = j1587.parse_button(frame)
+                    if seq is not None:
+                        if self.on_button:
+                            self.on_button(seq)
+                    elif self.watch:
+                        self.watch.observe_j1708(frame)
                 chunk.clear()
             time.sleep(0.001)
 
@@ -644,7 +681,7 @@ def run_check(sender, camera, detector, watch, wake, seconds, rpm, wake_rpm=1000
 
 
 def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, recover=5.0,
-              period=0.1, priority=6, log=print, transport=None, watch=None):
+              period=0.1, priority=6, log=print, transport=None, watch=None, announce=False, buttons=None):
     """Send each candidate and record the ones that change the picture or the cluster's output.
 
     bus is the CAN bus, or None when a transport is given. watch is an
@@ -653,7 +690,7 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
         transport = CanTransport(bus, priority)
         try:
             return run_sweep(bus, camera, detector, cands, out_dir, dwell, settle, recover, period, priority, log,
-                             transport, watch)
+                             transport, watch, announce, buttons)
         finally:
             transport.close()
     img_dir = os.path.join(out_dir, "img")
@@ -679,6 +716,11 @@ def run_sweep(bus, camera, detector, cands, out_dir, dwell=1.0, settle=0.5, reco
 
         snapshot = watch.mark() if watch else None
         sent_at = time.time()
+        if buttons:
+            buttons.sending(f"{transport.labels[0]} {sa:02X} {transport.labels[1]} {pgn:05X} data {payload.hex(' ')}")
+        if announce:
+            log(f"{datetime.now().strftime('%H:%M:%S')}  sending {transport.labels[0]} {sa:02X} "
+                f"{transport.labels[1]} {pgn:05X} data {payload.hex(' ')}")
         task = transport.start(sa, pgn, payload, period)
         best, best_frame, best_mask = 0.0, None, None
         stop_at = time.time() + dwell
@@ -880,11 +922,16 @@ def cmd_preview(args):
 
 
 def cmd_sweep(args):
+    if args.transport != "j1708":
+        args.wake = not args.no_wake  # the cluster ignores sweep frames unless an engine is being heard first
     if args.transport == "j1708":
         if not args.port:
             raise SystemExit("--transport j1708 needs --port, the ESP32 bridge's COM port")
-        if args.bits or args.background or args.wake:
-            raise SystemExit("--bits, --background and --wake only work on CAN")
+        if args.bits or args.background:
+            raise SystemExit("--bits and --background only work on CAN")
+        if args.wake and not args.channel:
+            raise SystemExit("--wake on a J1708 sweep also needs --interface and --channel for the CAN adapter "
+                             "that sends the engine heartbeat")
         cands = j1708_candidates(parse_hex_list(args.mids), parse_hex_list(args.pids), parse_hex_list(args.fills))
     else:
         if not args.channel or not (args.pgns or args.check_only):
@@ -895,16 +942,21 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = port = transport = reader = None
+    bus = port = transport = reader = wake_sender = None
     background = []
     watch = None if args.no_bus_watch else BusWatch()
+    buttons = ButtonLog(out_dir)
     if args.transport == "j1708":
         import serial
 
         port = serial.Serial(args.port, args.baud, timeout=0)
         transport = J1708Transport(port)
-        if watch:
-            reader = J1708Reader(port, watch)
+        if args.wake:
+            bus = canbus.open_bus(args)
+            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8),
+                                            on_rx=watch.observe_can if watch else None)
+            print(f"Running the can_wake engine heartbeat on CAN ({args.wake_rpm:g} rpm) before the J1708 sweep starts")
+        reader = J1708Reader(port, watch, on_button=buttons.press)  # always: the button frames come this way
     else:
         bus = canbus.open_bus(args)
         for spec in args.background:
@@ -918,11 +970,11 @@ def cmd_sweep(args):
             print(f"Running the can_wake engine heartbeat underneath ({args.wake_rpm:g} rpm)")
         transport = CanTransport(bus, sender=can_wake.CanSender(bus, background,
                                                                 on_rx=watch.observe_can if watch else None))
-        if watch and args.j1708_port:
+        if args.j1708_port:
             import serial
 
             port = serial.Serial(args.j1708_port, args.baud, timeout=0)
-            reader = J1708Reader(port, watch)
+            reader = J1708Reader(port, watch, on_button=buttons.press)
     if str(args.camera).lower() == "none":
         camera, detector = NullCamera(), ChangeDetector()
         if not watch:
@@ -931,25 +983,30 @@ def cmd_sweep(args):
         camera = Camera(args.camera, args.width, args.height, args.backend, rotation=args.rotate)
         detector = ChangeDetector(load_ignore(args.ignore), args.pixel_threshold, args.min_area)
     try:
-        if background:
-            time.sleep(2)
+        if background or wake_sender:
+            time.sleep(5 if args.wake else 2)  # let the cluster hear the engine before the first candidate
         if watch:
             print(f"Learning the cluster's normal output for {args.learn:g} s...")
             watch.learn(args.learn)
             if not watch.latest:
                 print("WARNING: heard nothing from the cluster; the bus watch can't find hits")
-        if args.check or args.check_only:
-            if not isinstance(transport, CanTransport):
-                raise SystemExit("--check works on CAN sweeps only")
+        sender = transport.sender if isinstance(transport, CanTransport) else wake_sender
+        if (args.check or args.check_only or not args.no_check) and sender is None:
+            if args.check or args.check_only:
+                raise SystemExit("--check on a J1708 sweep needs --wake (the CANable sends the engine frames)")
+            print("No bus check: a J1708 sweep without --wake has no CAN sender (add --wake --interface gs_usb --channel 0)")
+        elif args.check or args.check_only or not args.no_check:
             seconds = args.check_seconds or (6 if args.wake else 20)
-            ok = run_check(transport.sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
+            ok = run_check(sender, camera, detector, watch, args.wake, seconds, args.check_rpm,
                            args.wake_rpm, args.recover, wake_vecu=int(args.wake_vecu, 16))
             if args.check_only:
                 return
-            if not ok and input("Check failed. Start the sweep anyway? [y/N] ").strip().lower() != "y":
+            if not ok and not args.ignore_check:
+                print("The bus check failed, so the sweep was not started. Fix the setup (see the CHECK lines above), "
+                      "or add --ignore-check to sweep anyway.")
                 return
         hits = run_sweep(bus, camera, detector, cands, out_dir, args.dwell, args.settle, args.recover,
-                         transport=transport, watch=watch)
+                         announce=args.announce, transport=transport, watch=watch, buttons=buttons)
         print(f"Done: {hits} hits. Open {os.path.join(out_dir, 'review.html')} to review them.")
     except KeyboardInterrupt:
         write_review(out_dir, transport.labels)
@@ -959,6 +1016,8 @@ def cmd_sweep(args):
             reader.close()
         if isinstance(transport, CanTransport):
             transport.sender.close()
+        if wake_sender:
+            wake_sender.close()
         camera.close()
         if bus:
             canbus.close_bus(bus)
@@ -1008,12 +1067,19 @@ def main():
     sw.add_argument("--learn", type=float, default=30,
                     help="seconds to watch the cluster's output before the sweep, to learn what changes by itself")
     sw.add_argument("--check", action="store_true",
-                    help="CAN: before the sweep, send a known change (the tach) and check the camera/bus watch see it")
+                    help="the bus check now runs before every sweep by default; this flag is kept for --check-only runs")
+    sw.add_argument("--announce", action="store_true",
+                    help="print each candidate with the time as it is sent, to match a lamp you see to what was sent")
+    sw.add_argument("--no-check", action="store_true", help="skip the bus check that normally runs before the sweep")
+    sw.add_argument("--ignore-check", action="store_true", help="sweep even if the bus check fails")
     sw.add_argument("--check-only", action="store_true", help="CAN: run --check and stop")
     sw.add_argument("--check-rpm", type=float, default=2000, help="engine speed for --check (default 2000)")
     sw.add_argument("--check-seconds", type=float, help="how long --check sends (default 6 with --wake, else 20)")
     sw.add_argument("--wake", action="store_true",
-                    help="CAN: run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time")
+                    help="run can_wake's engine heartbeat (EEC1, ET1, EFL/P1, DM1, VEP1, CCVS1) the whole time, "
+                         "started before the first candidate. On by default for CAN sweeps. For a J1708 sweep "
+                         "add --wake with --interface/--channel and the CANable sends it")
+    sw.add_argument("--no-wake", action="store_true", help="CAN sweep: leave the engine heartbeat off")
     sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")
     sw.add_argument("--wake-vecu", default="27", help="source address for --wake's VEP1/CCVS1 (default 27)")
     sw.add_argument("--dwell", type=float, default=1.0, help="seconds to send each candidate")

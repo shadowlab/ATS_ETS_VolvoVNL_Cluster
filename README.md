@@ -8,25 +8,19 @@ Simulator   ──────► SimHub     ────► bridge    ───
                                                        (fuel, air)        21844839-P01
 ```
 
-> **Status: research and bench prep (October 2026).** The cluster and harness
-> are ordered; nothing has been powered up yet. Everything in `docs/` is from
-> public Volvo documents and the 2011–2013 VNL wiring diagram, not yet checked
-> on real hardware. This is the sequel to
-> [ATS_ETS_Mazda3_Cluster](https://github.com/shadowlab/ATS_ETS_Mazda3_Cluster).
+> **Status: bench testing (November 2026).** The cluster is powered on the
+> bench and both buses work in both directions. A scripted engine heartbeat
+> (`tools/can_wake.py`) moves the tach, oil pressure and coolant gauges; the
+> parking brake and "i" lamps are found. The speedo, odometer and the other
+> lamps are still open. See [messages.md](docs/messages.md) for what is
+> confirmed.
 
-## How it differs from the Mazda 3 build
+## The vehicle ECU
 
-| | Mazda 3 (2005) | Volvo VNL (2012) |
-|---|---|---|
-| Main bus | HS-CAN 500k, 11-bit IDs | J1939 CAN1 250k, 29-bit IDs |
-| Second bus | MS-CAN 125k | J1708/J1587, 9600 baud RS-485-style serial |
-| Analog inputs | Fuel sender | Fuel level and air pressures on connector C |
-| Known message map | Partly public | Standard J1939/J1587 for engine gauges; telltales are Volvo proprietary |
-| Finding unknown messages | Blind 11-bit sweep | Structured sweep (see [sweep plan](docs/sweep_plan.md)) |
-
-The cluster also expects to hear from the truck's vehicle ECU (VECU) on
-J1587. Without it, it shows "J1587 Communication Error with Vehicle ECU", so
-the bridge has to fake that ECU too.
+The cluster also expects to hear from the truck's vehicle ECU (VECU, MID 144).
+On the bench it logs the VECU as lost (SID 201), so the bridge may have to
+fake that ECU too. Volvo bulletins describe a "J1587 Communication Error"
+pop-up for this; it has not appeared on the bench.
 
 ## Repository layout
 
@@ -40,8 +34,8 @@ the bridge has to fake that ECU too.
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
-| `firmware/` | ESP32-S3 bridge firmware (to come) |
-| [`tools/`](tools/) | Bus listeners, a frame sender and the camera-watched sweep |
+| [`firmware/`](firmware/README.md) | ESP32-S3 firmware: J1708 to USB bridge and a bench button on GPIO41 (stage 1 only) |
+| [`tools/`](tools/) | Bus listeners and senders, the engine heartbeat, the sweep (camera, bus watch, button), logic analyzer capture and cross-check |
 
 ## Hardware
 
@@ -51,7 +45,8 @@ the bridge has to fake that ECU too.
 - SN65HVD230 CAN transceiver
 - XY-485 style RS-485 module (TVS protected, 4.7 kΩ bias fitted, auto
   direction) for J1708, with its 120 Ω terminator (R9, "121") removed
-- CANable 2.0 + SavvyCAN for listening and sweeping from a PC
+- CANable 2.0 (120 Ω jumper fitted) with python-can or SavvyCAN for listening and sweeping from a PC
+- 8-channel logic analyzer, and a push button on GPIO41 to mark changes during sweeps
 - Bench power supply, current-limited to about 1 A for the first power-up
 
 Full list with prices in [docs/parts.md](docs/parts.md).
@@ -61,8 +56,8 @@ Full list with prices in [docs/parts.md](docs/parts.md).
 The goal is every gauge and telltale the cluster supports working in game.
 Details in [docs/plan.md](docs/plan.md).
 
-1. **Bench bring-up and listen:** power the cluster and log what it asks for on CAN1 and J1708.
-2. **Sweep and map:** standard J1939 PGNs, Volvo proprietary PGNs and J1587 PIDs, with a camera watching for changes; measure analog gauge ranges.
+1. **Bench bring-up and listen:** done.
+2. **Sweep and map:** in progress. Standard PGNs done; J1587 PIDs partly swept; proprietary CAN range and analog ranges still to do.
 3. **ESP32-S3 firmware:** CAN1 and J1708 traffic, analog stand-ins, values over USB serial.
 4. **Game link:** SimHub or scs-sdk bridge from ATS/ETS2 telemetry.
 

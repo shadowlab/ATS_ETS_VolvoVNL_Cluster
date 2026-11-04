@@ -1,59 +1,63 @@
 # Sweep plan
 
-There's no real VN truck to record from, so messages are found by sweeping,
-as in the Mazda 3 build. The difference: the Mazda uses 11-bit IDs, which can
-be swept blindly. J1939 uses 29-bit IDs, so sweep by structure instead.
+No real VN truck to record from, so messages are found by sweeping. J1939 uses
+29-bit IDs, so sweep by structure, not blindly. Results go in
+[messages.md](messages.md#confirmed-on-the-bench).
 
-Tools: CANable 2.0 with SavvyCAN for listening, python-can for scripted
-sweeps, and the XY-485 plus a USB-serial adapter (or the ESP32) for J1708.
+Tools: CANable 2.0 (python-can), the ESP32 J1708 bridge on COM11, the logic
+analyzer, and `tools/sweep_watch.py` ([runbook](../tools/README.md#camera-sweep)).
+Sweeps run the engine heartbeat first (on by default), run a bus check before
+starting, and take `--announce` and the GPIO41 button for lamp changes
+(`buttons.csv`).
 
-## Where it stands (2026-10-29)
+## Status (2026-11-04)
 
-Steps 1 and the EEC1 part of step 2 are done on the bench. Both buses work
-both ways (CAN1 ACKs our frames, and the cluster answers J1708 requests), and
-the cluster at 0x17 reports a missing engine only through its own sensor
-faults. EEC1 and J1708 engine data together did not move the needles. The
-sweeps below are next, run with `tools/sweep_watch.py`
-([runbook](../tools/README.md#camera-sweep)).
+| Step | State |
+|---|---|
+| 1. Listen | Done. Cluster is SA 0x17 / MID 140; both buses work both ways |
+| 2. Standard J1939 PGNs | Done. The can_wake heartbeat moves tach, oil pressure and coolant and clears check engine. Speedo and odometer still dead |
+| 3. CAN proprietary 0xFF00-0xFFFF | Not run |
+| 4. J1708/J1587 | Partly done. Found the parking brake lamp and the "i" lamp (MID 144 PIDs 70, 71) |
+| 5. CAN3 | Not needed so far |
 
-## 1. Listen first
+## 3. CAN proprietary range (to run)
 
-Power the cluster with nothing else on the bus and log what it sends.
+0xFF00-0xFFFF is 256 PGNs per source address. Run with the heartbeat, for the
+speedo and any lamps:
 
-- **Requests (PGN 59904 / 0xEA00)** name the PGNs it wants to hear.
-- **Address claims (PGN 60928 / 0xEE00)** show its own source address.
-- On J1708, note anything it sends as MID 140, especially requests to the
-  VECU (likely MID 144).
+    python sweep_watch.py sweep --interface gs_usb --channel 0 --camera none --announce --pgns FF00-FFFF --sources 27,00 --payloads 40
 
-## 2. Standard J1939 PGNs
-
-Send the PGNs in [messages.md](messages.md) from the engine address (0x00)
-at their normal rates. These should move the main gauges quickly.
-
-## 3. Volvo proprietary range
-
-PGN 0xFF00 to 0xFFFF is 256 PGNs per source address. Sweep from 0x00 first,
-then other common addresses (0x03 transmission, 0x0B brakes, 0x21 body,
-0x17 cluster itself, 0x31 cab controller). Try all-zeros and all-ones
-payloads and watch for telltales and display changes. This is the likely home
-of turn signals and warning lights.
+About 13 min. Then sources 03, 0B, 21, 31; avoid 17 (the cluster itself).
+Also try all-FF and single-bit payloads.
 
 ## 4. J1708/J1587
 
-Step through PIDs 0 to 255 from MID 128 (engine) and MID 144 (likely VECU)
-with `sweep_watch.py sweep --transport j1708`. It's a small space at 9600
-baud. The bench showed no communication error pop-up, so this is about
-finding what moves the gauges. J1708 frames are
-MID + data + checksum (two's complement of the byte sum), and a sender waits
-for bus idle before transmitting.
+Done, MID 128 (`80`) and 144 (`90`), data 00 and FF, PIDs 00-FD: only the
+lamps above. MID 144 PIDs 00-7F with single-bit data 01-80: only PIDs 70-72
+changed a lamp.
 
-## 5. CAN3 (only if needed)
+Left:
 
-CAN3 goes to the radio and LECM, so skip it unless something on the display
-depends on it. If so, find its bitrate by listening (try 250 and 500 kbit/s),
-then sweep it the same way.
+- MID 144 PIDs 80-BF (two-byte data) and C0-FD, single-bit fills.
+- Which lamp each of `46 80`, `47 01/02/04/08`, `48 40/80` lights; what
+  clears a latched lamp.
+- Other MIDs: 0x82 transmission, 0x88 brakes, 0x8E, 0xD8 lighting, 0xE8 airbag.
 
-## Logging results
+    python sweep_watch.py sweep --transport j1708 --port COM11 --wake --interface gs_usb --channel 0 --camera none --announce --mids 90 --pids 80-BF --fills 01,02,04,08,10,20,40,80
 
-Record every hit in [messages.md](messages.md#confirmed-on-the-bench):
-bus, ID or MID/PID, payload, what moved.
+MIDs and PIDs are hex. Lamps latch, so power-cycle the cluster between tests.
+Check candidates from `buttons.csv` by sending them alone:
+`python j1708_listen.py --port COM11 --send "90 46 FF" --send-period 0.1`.
+
+## 5. CAN3
+
+CAN3 goes to the radio and LECM. Skip unless something on the display needs
+it; then find its bitrate (250 or 500 kbit/s) and sweep it the same way.
+
+## Checking without a camera
+
+- `la_capture.py capture` alongside, then `sweep_crosscheck.py --la <csv>`
+  lists candidates that changed the cluster's own J1708 output.
+- The sweep's own bus watch flags fault-report changes. Hits on PIDs 0x2C,
+  0x2F, 0x36 and 0xC3 so far were the cluster's own fault counts and
+  diagnostic replies, not controls.

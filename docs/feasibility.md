@@ -7,14 +7,14 @@ temperature moving, then several weeks of trial and error for the rest.
 
 ## Status (October 2026)
 
-All hardware for bench testing is bought or on hand, and the full A/B/C
-pinout is known from the wiring diagram. Nothing has been powered up yet.
+All hardware for bench testing is in hand and the cluster has been powered
+on the bench; the full A/B/C pinout is from the wiring diagram.
 
 | Area | Known | Still open |
 |---|---|---|
 | Power and ground | Battery on A:1 (F20), F15 key-switch circuit on A:3, ground on A:2 (the only cluster ground) | Whether the cluster wakes on A:1 + A:3 alone or needs bus traffic |
 | J1939 CAN1 | A:15 (H) and A:16 (L), 250 kbit/s | Cluster's own source address; whether it terminates CAN1 (measure A:15 to A:16) |
-| J1708/J1587 | A:17 (A, +) and A:18 (B, −), 9600 baud; cluster is MID 140 | What it needs from the VECU to clear the communication error |
+| J1708/J1587 | A:17 (A, +) and A:18 (B, −), 9600 baud; cluster is MID 140 | What it needs from the VECU (the cluster logs SID 201, VECU lost) |
 | CAN3 | A:10 (H) and A:22 (L); radio and sleeper climate only; 120 Ω inside the cluster | Not needed for gauges |
 | Analog gauges | Fuel sender on B:3; five air pressure gauges each on a supply + signal pair on connector B; sensor ground on A:12 and B:1 | Which pin of each pair is supply; resistance and voltage ranges |
 | Telltales and display | Seat belt, diff lock, air filter and fifth wheel are switch inputs on connector C | Turn signals, high beam, warnings and display pages, probably proprietary messages |
@@ -43,7 +43,9 @@ the 2011–2013 VNL wiring diagram (bridgeplan 21849527, sheets BA and BB).
   J1708 transceiver covers the gauges.
 - **The cluster wants its VECU.** Volvo service bulletins for 2013–2015 and
   2018–2019 trucks describe "J1587 Communication Error with Vehicle ECU" when
-  the cluster (MID 140) loses its J1587 partner. The bridge has to fake it.
+  the cluster (MID 140) loses its J1587 partner. The bridge may have to fake
+  it. The pop-up has not appeared on the bench; the cluster logs the VECU as
+  lost instead (SID 201).
 - **ACC input, no ignition input.** B:23 is fed from the accessory (ACC)
   rail through fuse F02, but no cluster pin connects to the ignition rail.
   A:3 is fed from F15, the battery supply to the key switch, which stays
@@ -79,8 +81,7 @@ under the original $360 to $650 estimate.
 
 ## ATS side
 
-Solved. SCS's Telemetry SDK feeds either **SimHub** (least PC-side code,
-reused from the Mazda build) or the **scs-sdk-plugin** (RenCloud fork) shared
+Solved. SCS's Telemetry SDK feeds either **SimHub** (least PC-side code) or the **scs-sdk-plugin** (RenCloud fork) shared
 memory, readable from Python with `truck-telemetry`. Between them they expose
 RPM, speed, odometer, cruise, parking brake, fuel, AdBlue, oil pressure and
 temperature, coolant, air pressure and warning, battery voltage, blinkers,
@@ -93,7 +94,7 @@ beams and backlight.
 | 1. Bench power | Cluster wakes; learn whether A:3 or bus traffic wakes it | Easy | 1 evening |
 | 2. Listen | Log what the cluster sends on CAN1 and J1708, including requests | Easy | 1 evening |
 | 3. Standard J1939 | Tach, speedo, coolant, oil, voltage move | Moderate | A weekend |
-| 4. J1587 and VECU | Communication error pop-up cleared | Moderate to hard | 1–3 weeks |
+| 4. J1587 and VECU | VECU lost fault (SID 201) cleared | Moderate to hard | 1–3 weeks |
 | 5. Analog gauges | Fuel and air pressure needles | Moderate | A weekend |
 | 6. Telltales and display | Blinkers, high beam, warnings, display pages | Hard | Weeks, open-ended |
 | 7. ATS link | SimHub feeding everything | Easy | 1–2 evenings |
