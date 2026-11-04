@@ -92,6 +92,16 @@ class WakeTest(unittest.TestCase):
     def test_parse_vecu(self):
         self.assertEqual(can_wake.parse_vecu("27,21"), [[0x27], [0x21]])
         self.assertEqual(can_wake.parse_vecu("15-18"), [[0x15, 0x16, 0x18]])   # skips the cluster, 17
+
+    def test_parse_extra_range(self):
+        one = can_wake.parse_extra("FE56:3D:7D 41")
+        self.assertEqual([m.arbitration_id for m in one], [0x18FE563D])
+        self.assertEqual(bytes(one[0].data), bytes.fromhex("7D41FFFFFFFFFFFF"))
+        many = can_wake.parse_extra("FE56:00-FD:7D")
+        sas = [m.arbitration_id & 0xFF for m in many]
+        self.assertEqual(len(sas), 253)                # 00-FD without the cluster, 17
+        self.assertIn(0x00, sas)
+        self.assertNotIn(0x17, sas)
         turns = can_wake.parse_vecu("sweep")
         flat = [sa for t in turns for sa in t]
         self.assertEqual(len(flat), len(set(flat)))

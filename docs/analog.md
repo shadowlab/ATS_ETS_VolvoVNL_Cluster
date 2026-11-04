@@ -141,6 +141,8 @@ list (PID 194) with `j1708_listen.py`.
   4 kΩ 3.861 V ~140 psi. Same curve as front; one table serves both.
 - 2026-11-04, DEF: FE56 from SA 3D, `7D 41` (50 %), with can_wake heartbeat
   and A:3 cycle: no needle, no new fault.
+- 2026-11-04, DEF: J1708 page-2 PID 22 = 7D (`80 FF 16 7D`, then `90 FF 16 7D`),
+  1 s, with A:3 cycle: no needle; page-2 PID 22 FMI 9 unchanged.
 - 2026-11-04, fuel B:3 to B:1: open 4.545 V; with 100 Ω, 1.459 V. Pull-up
   ≈ 212 Ω to 4.545 V, so up to ~21 mA into a short. Too stiff for the
   MCP4728 output to hold a voltage, so fuel needs the op-amp + 2N7002 sink
@@ -187,8 +189,9 @@ list (PID 194) with `j1708_listen.py`.
 - Fuel: confirm the MCP6002 + 2N7002 sink buffer holds B:3 at the table
   voltages (step 5, with the buffer in place of the box).
 - Air: confirm the MCP4728 reaches 4.89 V (180 psi) with VREF = VDD.
-- DEF: J1708 page-2 PID 22 (`80 FF 16 7D`, then MID 90); cluster logs
-  page-2 PID 22 FMI 9 (abnormal update rate). Then FE56 source sweep.
+- DEF: FE56 from every SA at once (`can_wake.py --extra "FE56:00-FD:7D 41"
+  --extra-period 1`), A:3 cycle; if it moves, halve the range. Then CAN
+  proprietary sweep (FF00-FFFF) from 00 and 3D watching the DEF needle.
 
 | Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
 |---|---|---|---|---|---|---|---|---|
