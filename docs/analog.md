@@ -73,8 +73,11 @@ positions. Keep it as a fallback.
   pull-ups to 5 V on the DAC side.
 - Reference: VDD (ratiometric) if powered from the cluster's 5 V sensor
   supply, or the internal 4.096 V reference (gain 2) on a separate 5 V
-  supply. The internal reference caps output at 4.096 V, about 135 psi on a
-  0.5 to 4.5 V sensor.
+  supply. The internal reference caps output at 4.096 V, below the top of a
+  0.5 to 4.5 V sensor, so use VDD as reference for the full 180 psi face.
+- If 180 psi needs more than about 4.9 V: rail-to-rail op-amp gain stage
+  (MCP6002) on 12 V after the DAC, or a 0 to 10 V DAC module (GP8403). Check
+  first where a voltage-high fault (FMI 3) sets; it may cap the needle.
 - DAC ground to sensor ground (B:1). Tie ESP32 ground to cluster ground
   (A:2) as on the bench now.
 - 1 kΩ in series with each air output protects it. Leave the fuel output
@@ -116,10 +119,10 @@ Nothing yet.
 - DEF: send AT1T1I with SPN 1761 (byte 1, 0.4 %/bit) from source 0x3D
   (aftertreatment), then 0x00, and watch the DEF gauge.
 
-| Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | Low-air clears at |
-|---|---|---|---|---|---|---|
-| Front | | | | | | |
-| Rear | | | | | | |
+| Air (front / rear) | Supply pin | Signal pin | V at 0 psi | V at 60 psi | V at 120 psi | V at 180 psi | Low-air clears at | FMI 3 sets at |
+|---|---|---|---|---|---|---|---|---|
+| Front | | | | | | | | |
+| Rear | | | | | | | | |
 
 | Fuel | V_open | Pull-up R | Ω at E | Ω at ½ | Ω at F | Pulsed? |
 |---|---|---|---|---|---|---|
