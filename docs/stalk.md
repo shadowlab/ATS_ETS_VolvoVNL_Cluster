@@ -98,11 +98,29 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
   | 232 airbag | J1587 | `8C 80 C2 E8` |
   | 223 | J1587 | `8C 80 C2 DF` |
 
+- 2026-11-05, answering as MID 144. The exchange has two steps: plain
+  request `8C 80 C2 90`, then a Volvo-wrapped request
+  `8C FE 90 04 D4 80 C2 90` (PID 254 to MID 144, `D4`, then the J1587 body).
+  The cluster sends the wrapped one only after it hears a plain PID 194 from
+  MID 144.
+
+  | Sent (every 0.5 s) | Result |
+  |---|---|
+  | `90 C2 00` | Wrapped request follows, then "Operation Failed" |
+  | `90 FE 8C 03 D4 C2 00` | Plain request x10, "Operation Failed" |
+  | `90 FE 8C 05 D4 C2 02 E7 1C` | Plain request x10, "Operation Failed" |
+  | `90 C2 00` + `90 FE 8C 03 D4 C2 00` | One plain + one wrapped request, **"No Faults"** |
+
+  The wrapped reply uses the same form as the cluster's own fault list to
+  MID 127 (`8C FE 7F 0C D4 C2 09 <codes>`).
+
 ## Left
 
-- Answer the PID 194 request as MID 144 with "no codes" (`90 C2 00`) and
-  see whether Fault Diagnostics shows the vehicle ECU, and whether SID 201
-  or the menu pop-up changes.
+- Send a code in the wrapped reply (`90 C2 00` + `90 FE 8C 05 D4 C2 02 E7 1C`,
+  SID 231 FMI 12) to confirm codes show on screen.
+- Same two replies for the other modules (MIDs 130, 136, 146, 216, 223, 232).
+- Whether answering clears SID 201 or the menu pop-up (not yet: SID 201 is
+  "device lost" on J1939 per bulletin 371-44).
 
 - Speedometer: find the message that drives it (motor proven by Gauge test).
 - DEF lamp: find what lights it (low-DEF threshold or a DM1 lamp).
