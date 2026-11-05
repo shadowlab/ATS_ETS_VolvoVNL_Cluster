@@ -58,6 +58,8 @@ Data link fault codes (Volvo SIDs) say which module is missing:
 | 204 | Data link, ABS (MID 136) |
 | 210 | Data link, lighting control module (MID 216) |
 | 214 | Data link, body builder module (MID 249) |
+| 205, 208, 211, 238, 239, 247 | Transmission, air suspension, adaptive cruise, climate, Volvo Link, tire pressure (MID 140 DTC guide) |
+| 235 | Data link, airbag ECU (MID 232) (MID 140 DTC guide; our cluster logs it at FMI 12) |
 | 231 | J1939 data link fault |
 | 250 | J1587/J1708 data link fault |
 

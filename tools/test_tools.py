@@ -93,6 +93,8 @@ class WakeTest(unittest.TestCase):
         self.assertEqual(bytes(frames["CCVS1"].data[:3]), b"\xf3\x00\x32")
         self.assertEqual(bytes(frames["VEP1"].data[4:]), b"\x14\x01\x14\x01")
         self.assertEqual(frames["VEP1"].arbitration_id, 0x18FEF727)
+        parked = {name: msg for name, _, msg in can_wake.heartbeats(0x27, 0, 0, 13.8, park=True)}
+        self.assertEqual(parked["CCVS1"].data[0], 0xF7)
 
     def test_parse_vecu(self):
         self.assertEqual(can_wake.parse_vecu("27,21"), [[0x27], [0x21]])

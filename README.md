@@ -34,6 +34,7 @@ pop-up for this; it has not appeared on the bench.
 | [`docs/sweep_plan.md`](docs/sweep_plan.md) | How to find the cluster's messages without a real truck |
 | [`docs/messages.md`](docs/messages.md) | Candidate J1939 PGNs and J1587 PIDs per gauge, plus a log of what's confirmed |
 | [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
+| [`docs/stalk.md`](docs/stalk.md) | Stalk buttons, DID menus, cluster self test and fault code screens, with bench steps |
 | [`docs/analog.md`](docs/analog.md) | Fuel, air and DEF gauge inputs, measured needle maps, MCP4728 drive |
 | [`firmware/`](firmware/README.md) | ESP32-S3 firmware: J1708 to USB bridge and a bench button on GPIO41 (stage 1 only) |
 | [`tools/`](tools/) | Bus listeners and senders, the engine heartbeat, the sweep (camera, bus watch, button), logic analyzer capture and cross-check |
