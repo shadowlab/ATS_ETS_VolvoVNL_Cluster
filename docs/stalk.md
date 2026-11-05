@@ -114,13 +114,16 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
   The wrapped reply uses the same form as the cluster's own fault list to
   MID 127 (`8C FE 7F 0C D4 C2 09 <codes>`).
 
+- With both replies running and a cluster power cycle (A:3), the J1587
+  pop-up no longer shows when the menu opens.
+
 ## Left
 
 - Send a code in the wrapped reply (`90 C2 00` + `90 FE 8C 05 D4 C2 02 E7 1C`,
   SID 231 FMI 12) to confirm codes show on screen.
 - Same two replies for the other modules (MIDs 130, 136, 146, 216, 223, 232).
-- Whether answering clears SID 201 or the menu pop-up (not yet: SID 201 is
-  "device lost" on J1939 per bulletin 371-44).
+- Whether SID 201 is now inactive in the cluster's fault list (MID 127 frame).
+- Speedometer with the MID 144 replies running.
 
 - Speedometer: find the message that drives it (motor proven by Gauge test).
 - DEF lamp: find what lights it (low-DEF threshold or a DM1 lamp).
