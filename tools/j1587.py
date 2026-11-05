@@ -45,15 +45,22 @@ PID_NAMES = {
     245: "Total distance",
 }
 
-# Volvo data link SIDs from bulletin 371-44. A cluster fault on one of these
-# names the module it is missing.
+# Volvo data link SIDs from bulletin 371-44, plus the MID 140 DTC guide
+# (docs/stalk.md). A cluster fault on one of these names the module it is missing.
 SID_NAMES = {
     200: "Data link, engine ECU (MID 128)",
     201: "Data link, vehicle ECU (MID 144)",
     202: "Data link, instrument cluster (MID 140)",
     204: "Data link, ABS (MID 136)",
+    205: "Data link, transmission ECU",
+    208: "Data link, air suspension",
     210: "Data link, lighting control module (MID 216)",
+    211: "Data link, adaptive cruise control",
     214: "Data link, body builder module (MID 249)",
+    235: "Data link, airbag ECU (MID 232)",
+    238: "Data link, climate unit",
+    239: "Data link, Volvo Link",
+    247: "Data link, tire pressure monitoring",
     231: "J1939 data link",
     250: "J1587/J1708 data link",
 }

@@ -79,8 +79,10 @@ def describe_turn(sas):
     return f"{len(sas)} SAs 0x{sas[0]:02X}-0x{sas[-1]:02X}"
 
 
-def heartbeats(vecu, rpm, kmh, volts):
+def heartbeats(vecu, rpm, kmh, volts, park=False):
     """(name, period in s, message) for every frame of one simulated truck.
+
+    park sets the parking brake in CCVS1 (SPN 70 = 01); otherwise it is released.
 
     vecu is one source address or a list of them; the VECU frames go out from each.
     """
@@ -95,8 +97,9 @@ def heartbeats(vecu, rpm, kmh, volts):
         vecu_frames += [
             # VEP1: battery potential (SPN 168) and keyswitch potential (SPN 158).
             ("VEP1" + tag(sa), 0.1, build_message(0xFEF7, sa, bytes([0xFF] * 4) + v + v)),
-            # CCVS1: parking brake released (SPN 70 = 00), wheel-based speed.
-            ("CCVS1" + tag(sa), 0.1, build_message(0xFEF1, sa, bytes([0xF3]) + speed_raw.to_bytes(2, "little"))),
+            # CCVS1: parking brake (SPN 70, byte 1 bits 4-3: 00 released, 01 set), wheel-based speed.
+            ("CCVS1" + tag(sa), 0.1, build_message(0xFEF1, sa, bytes([0xF7 if park else 0xF3])
+                                                   + speed_raw.to_bytes(2, "little"))),
         ]
     return vecu_frames + [
         # EEC1 with real-looking torque fields, as an engine sends it.
@@ -235,6 +238,7 @@ def main():
     ap.add_argument("--rpm", type=float, default=0)
     ap.add_argument("--kmh", type=float, default=0)
     ap.add_argument("--volts", type=float, default=13.8)
+    ap.add_argument("--park", action="store_true", help="parking brake set in CCVS1 (default released)")
     ap.add_argument("--extra", action="append", default=[], metavar="PGN:SA:DATA",
                     help="also send this frame (hex, as in can_listen --send) every --extra-period s; repeatable. "
                          "SA may be a range, e.g. FE56:00-FD:7D, to send it from every address at once")
@@ -265,7 +269,7 @@ def main():
             if now >= next_switch:
                 turn += 1
                 vecus = turns[turn % len(turns)]
-                frames = heartbeats(vecus, args.rpm, args.kmh, args.volts) + extras
+                frames = heartbeats(vecus, args.rpm, args.kmh, args.volts, park=args.park) + extras
                 print(time.strftime("%H:%M:%S"), f"turn {turn % len(turns) + 1}/{len(turns)}: VECU at {describe_turn(vecus)}")
                 shown = set()
                 for name, period, msg in frames:
