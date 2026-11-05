@@ -71,11 +71,17 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
 
 ## Tried
 
-Nothing yet.
+- 2026-11-05: pressing Enter (heartbeat with `--park`, no J1708 sent by us)
+  shows "J1587 Communication Error with Vehicle ECU". Enter/Esc dismisses it
+  and the menus, including Diagnostics and Cluster Self Test, open. J1708
+  log over two presses (enter.csv): the cluster sends nothing new, only its
+  usual 1 s / 10 s frames. So the pop-up comes from the stored SID 201 FMI 12
+  (VECU lost), not from an unanswered request. It goes when SID 201 clears.
 
 ## Left
 
-- Steps 1-8 above.
+- Steps 5-8 above: self test results (does the speedometer move in Gauge
+  test?), Fault Diagnostics codes, Part Number list.
 - Whether the Telltales test lights lamps we haven't found on the bus yet
   (helps the lamp map in [messages.md](messages.md)).
 - Steering wheel buttons on C:22 / C:25 / C:30: PWM coding unknown; low
