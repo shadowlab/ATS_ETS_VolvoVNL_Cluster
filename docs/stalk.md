@@ -116,14 +116,18 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
 
 - With both replies running and a cluster power cycle (A:3), the J1587
   pop-up no longer shows when the menu opens.
+- Same setup plus `can_wake.py --kmh 50` (brake released) and an A:3 cycle:
+  speedometer stays at 0. The cluster's fault list still shows SID 201
+  FMI 12 active with the count frozen at 4, so it looks like a stored code
+  that isn't re-evaluated.
 
 ## Left
 
 - Send a code in the wrapped reply (`90 C2 00` + `90 FE 8C 05 D4 C2 02 E7 1C`,
   SID 231 FMI 12) to confirm codes show on screen.
 - Same two replies for the other modules (MIDs 130, 136, 146, 216, 223, 232).
-- Whether SID 201 is now inactive in the cluster's fault list (MID 127 frame).
-- Speedometer with the MID 144 replies running.
+- Clear the cluster's stored codes (J1587 PID 195, clear all) and see
+  whether SID 201 returns with the MID 144 replies running.
 
 - Speedometer: find the message that drives it (motor proven by Gauge test).
 - DEF lamp: find what lights it (low-DEF threshold or a DM1 lamp).
