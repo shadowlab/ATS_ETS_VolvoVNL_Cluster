@@ -31,10 +31,6 @@ part numbers.
   moved it yet, which would show whether the motor and pointer work.
 - Older VNL clusters drop the engine data link during self test and need a
   key cycle (A:3) afterwards for the needles to follow data again.
-- Fault Diagnostics and Part Number probably make the cluster ask each
-  control unit over J1587 (requests, PID 194 / PID 254). A J1708 log while
-  opening them would show which MIDs this cluster expects. Units we don't
-  simulate should show "General Diagnostic Communication Error".
 - The steering wheel buttons may instead go through the steering wheel
   module (MID 250, CAN3) on this build. Not needed for the stalk.
 
@@ -85,7 +81,28 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
 - Fault Diagnostics queries the other control units; with none on the bench,
   each check fails. No part or software number found in the menus.
 
+- 2026-11-05, Fault Diagnostics request log (faults.csv, faults_can.csv).
+  Per module the cluster sends a J1587 PID 128 request for PID 194
+  (diagnostic codes), `8C 80 C2 <MID>`, every ~1.1 s, 10 times, then gives
+  up. Engine faults come from J1939 instead: one Request (0xEA00, SA 17 to
+  SA 00) for DM1 (0xFECA).
+
+  | Module | Bus | Request |
+  |---|---|---|
+  | 128 engine | J1939 | `18EA0017 CA FE 00` |
+  | 130 transmission | J1587 | `8C 80 C2 82` |
+  | 136 ABS | J1587 | `8C 80 C2 88` |
+  | 144 vehicle ECU | J1587 | `8C 80 C2 90` |
+  | 146 climate | J1587 | `8C 80 C2 92` |
+  | 216 lighting (LCM) | J1587 | `8C 80 C2 D8` |
+  | 232 airbag | J1587 | `8C 80 C2 E8` |
+  | 223 | J1587 | `8C 80 C2 DF` |
+
 ## Left
+
+- Answer the PID 194 request as MID 144 with "no codes" (`90 C2 00`) and
+  see whether Fault Diagnostics shows the vehicle ECU, and whether SID 201
+  or the menu pop-up changes.
 
 - Speedometer: find the message that drives it (motor proven by Gauge test).
 - DEF lamp: find what lights it (low-DEF threshold or a DM1 lamp).
