@@ -78,12 +78,18 @@ Cluster on A:1, A:2, A:3, B:23; CAN1 and J1708 connected.
   usual 1 s / 10 s frames. So the pop-up comes from the stored SID 201 FMI 12
   (VECU lost), not from an unanswered request. It goes when SID 201 clears.
 
+- 2026-11-05, Cluster Self Test: Gauge test moves every needle, speedometer
+  included, so the speedo motor works and only its message is missing.
+  Telltales test lights every lamp, including a DEF lamp
+  ([photo](images/telltale_test.png)).
+- Fault Diagnostics queries the other control units; with none on the bench,
+  each check fails. No part or software number found in the menus.
+
 ## Left
 
-- Steps 5-8 above: self test results (does the speedometer move in Gauge
-  test?), Fault Diagnostics codes, Part Number list.
-- Whether the Telltales test lights lamps we haven't found on the bus yet
-  (helps the lamp map in [messages.md](messages.md)).
+- Speedometer: find the message that drives it (motor proven by Gauge test).
+- DEF lamp: find what lights it (low-DEF threshold or a DM1 lamp).
+- Map the lamps in the telltale photo to messages ([messages.md](messages.md)).
 - Steering wheel buttons on C:22 / C:25 / C:30: PWM coding unknown; low
   priority.
 
