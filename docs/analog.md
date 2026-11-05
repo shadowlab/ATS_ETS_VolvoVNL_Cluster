@@ -82,8 +82,9 @@ Fuel, front air, rear air and DEF. Measured on the bench 2026-11-04 with
 - MCP4728 at VDD 5 V, VREF = VDD, so it reaches 4.89 V (180 psi). The
   internal 4.096 V reference would stop near 150 psi.
 - I2C: BSS138 level shifter (MCP4728 wants > 3.5 V high at VDD 5 V).
-- Fuel sink buffer: MCP6002 with DAC on +in and B:3 on −in, output to the
-  gate of a 2N7002, drain on B:3, source on B:1. Holds B:3 at the DAC
+- Fuel sink buffer: MCP6002 with B:3 on +in and the DAC on −in (the
+  MOSFET inverts, so feedback goes to +in), output to the gate of a 2N7002,
+  drain on B:3, source on B:1. Holds B:3 at the DAC
   voltage against the stiff pull-up; MCP4728 alone can't sink ~20 mA.
 - Digital pots ruled out for fuel (wiper resistance 75–150 Ω, few mA).
 - Grounds: DAC to B:1; ESP32 to A:2.
