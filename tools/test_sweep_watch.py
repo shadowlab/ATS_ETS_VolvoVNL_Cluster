@@ -195,6 +195,19 @@ class J1708SweepTest(unittest.TestCase):
         time.sleep(0.15)
         self.assertEqual(port.last_write[b"\x01\x02"], seen)
 
+    def test_keepalive_frames(self):
+        self.assertEqual(sw.parse_j1587("90 2C C0"), j1587.make_frame(0x90, b"\x2c\xc0"))
+        with self.assertRaises(SystemExit):
+            sw.parse_j1587("90")
+        port = FakePort()
+        args = type("A", (), {"j1708_keep": ["90 2C C0", "90 54 3E"], "j1708_keep_period": 0.05})()
+        w = sw.start_keep(port, args)
+        time.sleep(0.2)
+        w.stop()
+        self.assertIn(j1587.make_frame(0x90, b"\x2c\xc0"), port.last_write)
+        self.assertIn(j1587.make_frame(0x90, b"\x54\x3e"), port.last_write)
+        self.assertIsNone(sw.start_keep(port, type("A", (), {"j1708_keep": []})()))
+
 
 class NoCameraTest(unittest.TestCase):
     def test_sweep_without_camera_writes_windows_and_no_hits(self):

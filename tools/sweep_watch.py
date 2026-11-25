@@ -159,12 +159,24 @@ class _Stop:
         self.stop = fn
 
 
+# The ESP32 bridge merges serial writes that arrive within ~3 ms into one frame, so every
+# writer to the J1708 port takes this lock and leaves a gap after its frame.
+PORT_LOCK = threading.Lock()
+WRITE_GAP = 0.05
+
+
+def write_spaced(port, frame):
+    with PORT_LOCK:
+        port.write(frame)
+        time.sleep(WRITE_GAP)
+
+
 class PeriodicWriter:
-    """Writes one frame to a serial port now and then every period, until stopped."""
+    """Writes one or more frames to a serial port now and then every period, until stopped."""
 
     def __init__(self, port, frame, period):
         self.port = port
-        self.frame = frame
+        self.frames = [frame] if isinstance(frame, (bytes, bytearray)) else list(frame)
         self.period = period
         self.stopped = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -172,12 +184,33 @@ class PeriodicWriter:
 
     def _run(self):
         while not self.stopped.is_set():
-            self.port.write(self.frame)
+            for frame in self.frames:
+                write_spaced(self.port, frame)
             self.stopped.wait(self.period)
 
     def stop(self):
         self.stopped.set()
         self.thread.join(timeout=1)
+
+
+def parse_j1587(text):
+    """"MID DATA..." in hex (no checksum) into a J1587 frame."""
+    try:
+        raw = bytes(int(b, 16) for b in text.replace(",", " ").split())
+    except ValueError:
+        raw = b""
+    if len(raw) < 2 or len(raw) + 1 > j1587.MAX_FRAME:
+        raise SystemExit(f"--j1708-keep: expected MID and data as hex bytes, e.g. \"90 2C C0\", got {text!r}")
+    return j1587.make_frame(raw[0], raw[1:])
+
+
+def start_keep(port, args):
+    """Starts the --j1708-keep frames (if any) on the bridge port."""
+    if not args.j1708_keep:
+        return None
+    frames = [parse_j1587(text) for text in args.j1708_keep]
+    print("Sending on J1708 every", f"{args.j1708_keep_period:g} s:", ", ".join(f.hex(" ") for f in frames))
+    return PeriodicWriter(port, frames, args.j1708_keep_period)
 
 
 class J1708Transport:
@@ -942,7 +975,7 @@ def cmd_sweep(args):
     os.makedirs(out_dir, exist_ok=True)
     print(f"Writing to {out_dir}")
 
-    bus = port = transport = reader = wake_sender = None
+    bus = port = transport = reader = wake_sender = keep = None
     background = []
     watch = None if args.no_bus_watch else BusWatch()
     buttons = ButtonLog(out_dir)
@@ -953,10 +986,11 @@ def cmd_sweep(args):
         transport = J1708Transport(port)
         if args.wake:
             bus = canbus.open_bus(args)
-            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8),
+            wake_sender = can_wake.CanSender(bus, can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, args.wake_kmh, 13.8),
                                             on_rx=watch.observe_can if watch else None)
             print(f"Running the can_wake engine heartbeat on CAN ({args.wake_rpm:g} rpm) before the J1708 sweep starts")
         reader = J1708Reader(port, watch, on_button=buttons.press)  # always: the button frames come this way
+        keep = start_keep(port, args)
     else:
         bus = canbus.open_bus(args)
         for spec in args.background:
@@ -966,7 +1000,7 @@ def cmd_sweep(args):
                               is_extended_id=True)
             background.append((f"background {len(background) + 1}", 0.1, msg))
         if args.wake:
-            background += can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, 0, 13.8)
+            background += can_wake.heartbeats(int(args.wake_vecu, 16), args.wake_rpm, args.wake_kmh, 13.8)
             print(f"Running the can_wake engine heartbeat underneath ({args.wake_rpm:g} rpm)")
         transport = CanTransport(bus, sender=can_wake.CanSender(bus, background,
                                                                 on_rx=watch.observe_can if watch else None))
@@ -975,6 +1009,9 @@ def cmd_sweep(args):
 
             port = serial.Serial(args.j1708_port, args.baud, timeout=0)
             reader = J1708Reader(port, watch, on_button=buttons.press)
+            keep = start_keep(port, args)
+        elif args.j1708_keep:
+            raise SystemExit("--j1708-keep on a CAN sweep needs --j1708-port")
     if str(args.camera).lower() == "none":
         camera, detector = NullCamera(), ChangeDetector()
         if not watch:
@@ -1012,6 +1049,8 @@ def cmd_sweep(args):
         write_review(out_dir, transport.labels)
         print(f"Stopped. Run the same command with --out {out_dir} to resume.")
     finally:
+        if keep:
+            keep.stop()
         if reader:
             reader.close()
         if isinstance(transport, CanTransport):
@@ -1081,6 +1120,11 @@ def main():
                          "add --wake with --interface/--channel and the CANable sends it")
     sw.add_argument("--no-wake", action="store_true", help="CAN sweep: leave the engine heartbeat off")
     sw.add_argument("--wake-rpm", type=float, default=1000, help="engine speed for --wake (default 1000)")
+    sw.add_argument("--wake-kmh", type=float, default=0, help="road speed in --wake's CCVS1 (default 0)")
+    sw.add_argument("--j1708-keep", action="append", default=[], metavar="MID DATA",
+                    help="send this J1587 frame (hex, as in j1708_listen --send) every --j1708-keep-period s for the "
+                         "whole run, e.g. \"90 2C C0\" so the cluster counts the VECU as present; repeatable")
+    sw.add_argument("--j1708-keep-period", type=float, default=0.5, help="seconds between --j1708-keep rounds")
     sw.add_argument("--wake-vecu", default="27", help="source address for --wake's VEP1/CCVS1 (default 27)")
     sw.add_argument("--dwell", type=float, default=1.0, help="seconds to send each candidate")
     sw.add_argument("--settle", type=float, default=0.5, help="seconds to keep watching after it stops")
