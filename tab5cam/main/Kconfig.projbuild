@@ -1,12 +1,12 @@
 # esp_hosted's manifest tests these options to add its USB-transport dependencies, but no Kconfig
 # defines them on this setup, which stops the build ("Missing required kconfig option after retry").
-# Wi-Fi here goes over SDIO, so they are off.
+# Wi-Fi here goes over SDIO, so they are 0 (the manifest compares them with 1).
 config ESP_HOSTED_HOST_USB_CDC_ACM_MANIFEST
-    bool "Not used (Wi-Fi goes over SDIO)"
-    default n
+    int "Not used (Wi-Fi goes over SDIO)"
+    default 0
 config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
-    bool "Not used (Wi-Fi goes over SDIO)"
-    default n
+    int "Not used (Wi-Fi goes over SDIO)"
+    default 0
 config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
-    bool "Not used (Wi-Fi goes over SDIO)"
-    default n
+    int "Not used (Wi-Fi goes over SDIO)"
+    default 0
