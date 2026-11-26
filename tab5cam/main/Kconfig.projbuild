@@ -10,3 +10,16 @@ config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
 config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
     int "Not used (Wi-Fi goes over SDIO)"
     default 0
+
+# components/tab5_board (from RetroESP's Tab5 port) builds only for the Tab5 and reads these.
+config BOARD_M5STACK_TAB5
+    bool
+    default y
+config TAB5_DOUBLE_BUFFER
+    bool "Tab5: double-buffered, tear-free display"
+    default y
+config TAB5_ROTATE_180
+    bool "Tab5: turn the picture and touch by 180 degrees"
+    default y
+    help
+        On is the right way up for RetroESP on Lab's Tab5; this firmware uses the same setting.

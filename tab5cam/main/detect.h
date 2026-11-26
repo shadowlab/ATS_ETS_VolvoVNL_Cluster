@@ -25,3 +25,17 @@ void det_rebaseline(void);
 void det_autoexposure(int target);               /* 0 = configured target */
 esp_err_t det_copy_latest(uint8_t *dst, bool overlay);   /* w*h bytes */
 char *det_status_json(void);                     /* caller frees */
+
+/* For the on-screen preview: the latest frame (w*h bytes) and where the regions are. */
+#define DET_MAX_ROI 24
+typedef struct {
+    int x, y, w, h;
+    char kind;       /* 'n' needle, 'l' lamp, 'r' ref */
+    bool active;     /* changed right now */
+} det_roi_view_t;
+typedef struct {
+    int n, events;
+    bool glare, learning, autoexposure;
+    det_roi_view_t roi[DET_MAX_ROI];
+} det_view_t;
+esp_err_t det_view(uint8_t *gray, det_view_t *v);

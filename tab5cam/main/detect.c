@@ -15,7 +15,7 @@
 
 static const char *TAG = "detect";
 
-#define MAX_ROI 24
+#define MAX_ROI DET_MAX_ROI
 #define LEARN_FRAMES 8
 
 typedef enum { KIND_NEEDLE, KIND_LAMP, KIND_REF } kind_t;
@@ -300,6 +300,25 @@ esp_err_t det_copy_latest(uint8_t *dst, bool overlay)
             }
         }
     }
+    return ESP_OK;
+}
+
+esp_err_t det_view(uint8_t *gray, det_view_t *v)
+{
+    if (!s_ready || !s_latest) return ESP_ERR_INVALID_STATE;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    memcpy(gray, s_latest, (size_t)s_w * s_h);
+    v->n = s_cfg.n;
+    for (int i = 0; i < s_cfg.n; i++) {
+        const roi_t *r = &s_cfg.roi[i];
+        v->roi[i] = (det_roi_view_t){.x = r->x, .y = r->y, .w = r->w, .h = r->h,
+                                     .kind = KIND_NAMES[r->kind][0], .active = s_st[i].active};
+    }
+    v->events = s_seq;
+    v->glare = s_glare;
+    v->learning = s_learn > 0;
+    v->autoexposure = s_ae.phase != 0;
+    xSemaphoreGive(s_lock);
     return ESP_OK;
 }
 

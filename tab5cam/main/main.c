@@ -16,6 +16,7 @@
 #include "jpeg.h"
 #include "net.h"
 #include "nvs_flash.h"
+#include "ui.h"
 #include "web.h"
 
 static const char *TAG = "main";
@@ -86,6 +87,9 @@ void app_main(void)
     } else {
         ESP_ERROR_CHECK(det_init(cam_width(), cam_height(), web_event, web_hit));
         ESP_LOGI(TAG, "CAMERA OK %dx%d", cam_width(), cam_height());
+    }
+    if (ui_start(err == ESP_OK ? cam_width() : 0, err == ESP_OK ? cam_height() : 0) != ESP_OK) {
+        ESP_LOGE(TAG, "SCREEN FAILED: the camera still runs; set Wi-Fi over USB");
     }
     console();
 }

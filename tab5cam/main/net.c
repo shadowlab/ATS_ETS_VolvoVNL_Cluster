@@ -1,6 +1,7 @@
 #include "net.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "board.h"
 #include "esp_event.h"
@@ -18,6 +19,8 @@ static esp_netif_t *s_sta;
 static bool s_wifi_ok;
 static volatile bool s_up;
 static char s_ip[20];
+static char s_ssid[33];
+static volatile bool s_scanning;
 
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
@@ -26,7 +29,7 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         if (s_up) ESP_LOGW(TAG, "Wi-Fi lost (reason %d), reconnecting", ev->reason);
         s_up = false;
         s_ip[0] = 0;
-        esp_wifi_connect();
+        if (!s_scanning && s_ssid[0]) esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         const ip_event_got_ip_t *ev = data;
         snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&ev->ip_info.ip));
@@ -49,6 +52,7 @@ static bool load(char *ssid, size_t sl, char *pass, size_t pl)
 static void connect(const char *ssid, const char *pass)
 {
     wifi_config_t wc = {0};
+    strlcpy(s_ssid, ssid, sizeof(s_ssid));
     strlcpy((char *)wc.sta.ssid, ssid, sizeof(wc.sta.ssid));
     strlcpy((char *)wc.sta.password, pass, sizeof(wc.sta.password));
     wc.sta.threshold.authmode = pass[0] ? WIFI_AUTH_WEP : WIFI_AUTH_OPEN;
@@ -109,7 +113,7 @@ esp_err_t net_start(void)
     if (load(ssid, sizeof(ssid), pass, sizeof(pass))) {
         connect(ssid, pass);
     } else {
-        printf("NO WIFI: set it with  python tab5_cam.py setup --port COMx --ssid <name> --password <pass>\n");
+        printf("NO WIFI: pick a network on the screen, or  python tab5_cam.py setup --port COMx --ssid <name> --password <pass>\n");
     }
     return ESP_OK;
 }
@@ -134,4 +138,47 @@ int net_rssi(void)
 {
     wifi_ap_record_t ap;
     return s_up && esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
+}
+
+void net_ssid(char *buf, size_t len) { strlcpy(buf, s_ssid, len); }
+
+static int by_rssi(const void *a, const void *b) { return ((const net_ap_t *)b)->rssi - ((const net_ap_t *)a)->rssi; }
+
+int net_scan(net_ap_t *out, int max)
+{
+    if (!s_wifi_ok || max <= 0) return -1;
+    s_scanning = true;
+    if (!s_up) esp_wifi_disconnect();   /* a join that keeps retrying blocks the scan */
+    const wifi_scan_config_t sc = {.show_hidden = false};
+    esp_err_t err = esp_wifi_scan_start(&sc, true);
+    int n = -1;
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Scan failed (0x%x)", err);
+    } else {
+        uint16_t num = 40;
+        wifi_ap_record_t *rec = calloc(num, sizeof(*rec));
+        if (rec && esp_wifi_scan_get_ap_records(&num, rec) == ESP_OK) {
+            n = 0;
+            for (int i = 0; i < num; i++) {
+                const char *name = (const char *)rec[i].ssid;
+                if (!name[0]) continue;
+                int j = 0;
+                while (j < n && strcmp(out[j].ssid, name) != 0) j++;
+                if (j < n) {
+                    if (rec[i].rssi > out[j].rssi) out[j].rssi = rec[i].rssi;
+                    continue;
+                }
+                if (n == max) continue;
+                strlcpy(out[n].ssid, name, sizeof(out[n].ssid));
+                out[n].rssi = rec[i].rssi;
+                out[n].secure = rec[i].authmode != WIFI_AUTH_OPEN;
+                n++;
+            }
+            qsort(out, n, sizeof(*out), by_rssi);
+        }
+        free(rec);
+    }
+    s_scanning = false;
+    if (!s_up && s_ssid[0]) esp_wifi_connect();
+    return n;
 }

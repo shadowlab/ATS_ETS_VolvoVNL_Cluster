@@ -30,11 +30,21 @@ aiming the camera.
 1. The C6 must run ESP-Hosted 3.0.9 (done once with tab5-p4-c6-sdio-ota, as for RetroESP).
 2. Flash from CI: `tools\flash_tab5.ps1 -Port COM6` (newest `cam-build` release) or `-Pr <n>`.
    The summary shows `camera OK` and exits 0.
-3. Wi-Fi, over USB: `python tab5_cam.py setup --port COM6 --ssid "<network>" --password "<password>"`.
-   It prints the address. The Tab5 is also `vnl-cam.local`.
-4. Aim it: open `http://vnl-cam.local/` (live picture, region scores, events).
+3. Wi-Fi (2.4 GHz only): on the Tab5 screen tap **Wi-Fi**, pick the network, type the password. Or over
+   USB: `python tab5_cam.py setup --port COM6 --ssid "<network>" --password "<password>"`.
+   The screen shows the address. The Tab5 is also `vnl-cam.local`.
+4. Aim it with the preview on the Tab5 screen, or at `http://vnl-cam.local/` (live picture, region scores,
+   events).
 5. `python tab5_cam.py pick`: drag a box per gauge or lamp, name it, pick its kind; add one `ref` box.
 6. With the cluster on and idle: `python tab5_cam.py exposure`.
+
+## Screen
+
+Live preview with the regions (green needle, cyan lamp, blue ref, red changed, yellow glare), Wi-Fi
+state and address, fps, exposure, gain, event count. Buttons: Wi-Fi, New baseline, Auto exposure, Screen
+off. The backlight goes off 2 minutes after the last touch, so it doesn't light the cluster, and the
+baseline is retaken 2 s later. A touch turns it back on (that touch presses nothing). Set the regions with
+the screen off, or after it goes off.
 
 Mounting: fixed, no movement between the Tab5 and the cluster; shade the cluster face from windows and
 overhead lights where possible. Keep the Tab5 on USB power.
@@ -68,7 +78,8 @@ A change can show just after a window ends; `--margin` (0.5 s) still credits tha
 
 ## Firmware
 
-`tab5cam/`, ESP-IDF 5.5.2. SC202CS (SC2356) on MIPI-CSI at 1280x720, processed as 640x360 gray.
+`tab5cam/`, ESP-IDF 5.5.2. Screen and touch: `tab5cam/components/tab5_board` (from RetroESP's Tab5
+port, detects the panel revision), LVGL 9.2. SC202CS (SC2356) on MIPI-CSI at 1280x720, processed as 640x360 gray.
 HTTP API is listed at the top of `tab5cam/main/web.c`. CI: `.github/workflows/tab5cam.yml`; merges publish
 `cam-build-<n>` releases with `vnl-tab5cam.bin` (write at 0x0). They are not marked latest, so the bridge's
 `releases/latest` link is unchanged.

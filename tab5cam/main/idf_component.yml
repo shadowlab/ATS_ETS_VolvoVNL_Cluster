@@ -11,3 +11,6 @@ dependencies:
     version: "1.6.5"
   espressif/mdns:
     version: "^1.8"
+  # Screen UI (preview, Wi-Fi picker). Screen and touch drivers come from components/tab5_board.
+  lvgl/lvgl:
+    version: "9.2.2"
