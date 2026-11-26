@@ -51,6 +51,8 @@ lamp each: untested).
 - VECU at SA 0x11 (Volvo body builder manual): CCVS1 alone and with switch bytes 00; FF00-FFFF fill 40 from SA 11, 27, 00. Speedo 0.
 - All at once, 50 km/h: CCVS1 SA 11 + 00, EBC2 SA 0B, ETC1 SA 03, TCO1 SA EE, J1587 PID 44 + 84 from MIDs 144, 128, 136. Speedo 0.
 - J1708 sweep MIDs 144 and 128, PIDs 00-FD, fill 40, VECU present: speedo 0.
+- Proprietary A EF17 and EFFF from SA 11, first byte 00-FF, rest 40: speedo 0.
+- ETC2 (F005, SA 03, gear 8, range "D") + ETC1 + J1587 MID 130 PIDs 44/162/163: RNDM gear box stays blank, speedo 0.
 - FF01/FF02 from SA 00, single-bit payloads: speedo 0. Fill 40 on FF01/FF02 from SA 00 reboots the cluster.
 - The cluster's PID 194 list (incl. PID 84 FMI 9, road speed missing >8 s) never changes: not usable as feedback.
 - The DID Non-Driving menu locks only on engine rpm > 0, not on speed or the parking brake: not a speed detector.
@@ -60,7 +62,7 @@ lamp each: untested).
 - J1708 MID 144, PIDs 80-BF (two-byte data) and C0-FD, single-bit fills.
 - Map which lamp each of `46 80`, `47 01/02/04/08` and `48 40/80` lights, and what clears a latched lamp (`00`?).
 - Other MIDs, sent like MID 144: 0x82 transmission, 0x88 brakes, 0x8E, 0xD8 lighting, 0xE8 airbag.
-- Speedo: Proprietary A (EF00) from SA 11 to DA 17; PDU2 ranges FExx, FDxx, F0xx from SA 11 and 00; J1587 page-2 PIDs from MID 144. Cluster config (speed source, tachograph) may need Premium Tech Tool.
+- Speedo and gear box: log a real 2010-2013 VNL VECU on the bench (VSS input fed a square wave) and replay its frames. Still untested by sweep: PDU2 FExx/FDxx/F0xx from SA 11, J1587 page-2 PIDs.
 - DM1 lamp bits from SA 0x00: byte 1 bits 8-7 MIL, 6-5 red stop, 4-3 amber, 2-1 protect (00 off, 01 on).
 - Airbag lamp: MID 232 messages, if the lamp needs the SRS module.
 - Ask the cluster for Component ID (PGN 0xFEEB) and Software ID (0xFEDA): `can_send.py --pgn EA00 --sa F9 --da 17 --data "EB FE 00" --period 0`.
