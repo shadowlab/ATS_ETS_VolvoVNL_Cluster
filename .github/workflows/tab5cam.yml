@@ -36,7 +36,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           . "$IDF_PATH/export.sh" > /dev/null
           cd tab5cam
-          idf.py build > build.log 2>&1 || { grep -v '^NOTICE: Using component\|^\.*NOTICE: Using' build.log | grep -i -B3 -A12 'error\|missing\|warning: ' | head -150; exit 1; }
+          idf.py build > build.log 2>&1 || { grep -v '^NOTICE: Using component\|^\.*NOTICE: Using' build.log | grep -i -B3 -A12 'error\|missing\|warning: ' | head -150; grep -n 'CONFIG{' managed_components/*/idf_component.yml; exit 1; }
           tail -5 build.log
           idf.py merge-bin -o vnl-tab5cam.bin
           mkdir -p ../dist
