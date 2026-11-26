@@ -36,6 +36,7 @@ pop-up for this; it has not appeared on the bench.
 | [`docs/data_links.md`](docs/data_links.md) | Notes from Volvo bulletin 371-44: bus topology, MIDs, data link fault codes, voltages, termination |
 | [`docs/analog.md`](docs/analog.md) | Fuel, air and DEF gauge inputs, measured needle maps, MCP4728 drive |
 | [`firmware/`](firmware/README.md) | ESP32-S3 firmware: J1708 to USB bridge and a bench button on GPIO41 (stage 1 only) |
+| [`tab5cam/`](docs/tab5_camera.md) | M5Stack Tab5 sweep camera: watches gauge and lamp regions, reports changes over Wi-Fi |
 | [`tools/`](tools/) | Bus listeners and senders, the engine heartbeat, the sweep (camera, bus watch, button), logic analyzer capture and cross-check |
 
 ## Hardware

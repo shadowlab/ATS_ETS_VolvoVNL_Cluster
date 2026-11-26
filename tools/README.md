@@ -15,9 +15,11 @@ PC-side scripts for the bench. Install with `pip install -r requirements.txt`
 | `button_test.py` | Checks the ESP32's GPIO41 "I saw a change" button reaches the PC once per press |
 | `sweep_crosscheck.py` | Finds sweep candidates that changed the cluster's own CAN/J1708 traffic, from the logs, without the camera |
 | `can_wake.py` | Plays a simulated truck: engine and VECU heartbeats, key-on, VECU address cycling |
+| `tab5_cam.py` | The Tab5 camera: Wi-Fi setup, regions to watch, fixed exposure, and `watch`, which logs its hits against a sweep's candidates ([docs/tab5_camera.md](../docs/tab5_camera.md)) |
+| `flash_tab5.ps1` | Flashes the Tab5 camera from a CI build and checks its boot log |
 | `sweep_watch.py` | J1939 or J1587 sweep, with engine heartbeat and a bus check first; camera, bus watch or the GPIO41 button catch changes; logs hits |
 | `canbus.py`, `j1939.py`, `j1587.py` | Shared helpers; `canbus.py` opens the CAN adapter, including candleLight on Windows |
-| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch test_sweep_crosscheck test_button` |
+| `test_*.py` | Offline checks: `python -m unittest test_tools test_canbus test_selftest test_j1708_selftest test_la_capture test_sweep_watch test_sweep_crosscheck test_button test_tab5_cam` |
 
 ## Self-test without the cluster
 
