@@ -75,11 +75,17 @@ def parse_hex_list(text):
 
 
 def parse_payloads(text):
-    """'00,FF' -> eight-byte fills; a 16-digit hex string is taken as-is."""
+    """'00,FF' -> eight-byte fills; a 16-digit hex string is taken as-is.
+
+    One XX in a 16-digit string is swept 00-FF: XX40404040404040 gives 256 payloads.
+    """
     payloads = []
     for part in text.split(","):
         part = part.replace(" ", "")
-        if len(part) == 2:
+        if len(part) == 16 and part.upper().count("XX") == 1 and part.upper().index("XX") % 2 == 0:
+            at = part.upper().index("XX")
+            payloads += [bytes.fromhex(part[:at] + f"{v:02X}" + part[at + 2:]) for v in range(256)]
+        elif len(part) == 2:
             payloads.append(bytes([int(part, 16)]) * 8)
         elif len(part) == 16:
             payloads.append(bytes.fromhex(part))
@@ -141,7 +147,9 @@ class CanTransport:
         self.sender = sender or can_wake.CanSender(bus)
 
     def start(self, sa, pgn, payload, period):
-        msg = can.Message(arbitration_id=j1939.make_id(pgn, sa, priority=self.priority), data=payload,
+        # A PDU1 PGN (PF below F0) carries its destination in the low byte: EF17 goes to the cluster.
+        da = pgn & 0xFF if (pgn >> 8) & 0xFF < 0xF0 else j1939.GLOBAL
+        msg = can.Message(arbitration_id=j1939.make_id(pgn, sa, da, priority=self.priority), data=payload,
                           is_extended_id=True)
         self.sender.set("candidate", period, msg)
         return _Stop(lambda: self.sender.remove("candidate"))
@@ -1096,7 +1104,8 @@ def main():
     sw.add_argument("--fills", default="00,FF", help="j1708: hex fill bytes for the data")
     sw.add_argument("--pgns", help="hex PGNs and ranges, e.g. FF00-FFFF,FEF1")
     sw.add_argument("--sources", default="00", help="hex source addresses, e.g. 00,03,21")
-    sw.add_argument("--payloads", default="00,FF", help="fill bytes or 8-byte hex payloads")
+    sw.add_argument("--payloads", default="00,FF",
+                    help="fill bytes or 8-byte hex payloads; one XX byte in a payload is swept 00-FF, e.g. XX40404040404040")
     sw.add_argument("--bits", action="store_true", help="flip one bit at a time from the first payload")
     sw.add_argument("--background", action="append", default=[], metavar="PGN:SA:DATA",
                     help="also send this every 100 ms for the whole run, e.g. F004:00:FFFFFF401FFFFFFF")

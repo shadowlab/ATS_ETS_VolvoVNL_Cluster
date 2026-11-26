@@ -195,6 +195,20 @@ class J1708SweepTest(unittest.TestCase):
         time.sleep(0.15)
         self.assertEqual(port.last_write[b"\x01\x02"], seen)
 
+    def test_swept_payload_byte(self):
+        out = sw.parse_payloads("XX40404040404040")
+        self.assertEqual(len(out), 256)
+        self.assertEqual(out[0x11], bytes.fromhex("1140404040404040"))
+        self.assertEqual(sw.parse_payloads("40XX000000000000")[2], bytes.fromhex("4002000000000000"))
+
+    def test_pdu1_candidate_keeps_destination(self):
+        sender = type("S", (), {"set": lambda self, n, p, m: setattr(self, "msg", m), "remove": lambda self, n: None})()
+        t = sw.CanTransport(None, sender=sender)
+        t.start(0x11, 0xEF17, bytes(8), 0.1)
+        self.assertEqual(sender.msg.arbitration_id, 0x18EF1711)
+        t.start(0x11, 0xFF02, bytes(8), 0.1)
+        self.assertEqual(sender.msg.arbitration_id, 0x18FF0211)
+
     def test_keepalive_frames(self):
         self.assertEqual(sw.parse_j1587("90 2C C0"), j1587.make_frame(0x90, b"\x2c\xc0"))
         with self.assertRaises(SystemExit):
