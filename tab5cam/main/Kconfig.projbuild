@@ -1,5 +1,12 @@
-# esp_video's manifest tests this option to pick its esp_h264 version, but its published Kconfig doesn't
-# always define it, which stops the build ("Missing required kconfig option"). Define it here.
-config ESP_VIDEO_USE_CUSTOMIZED_ESP_H264_VERSION
+# esp_hosted's manifest tests these options to add its USB-transport dependencies, but no Kconfig
+# defines them on this setup, which stops the build ("Missing required kconfig option after retry").
+# Wi-Fi here goes over SDIO, so they are off.
+config ESP_HOSTED_HOST_USB_CDC_ACM_MANIFEST
+    bool
+    default n
+config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
+    bool
+    default n
+config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
     bool
     default n
