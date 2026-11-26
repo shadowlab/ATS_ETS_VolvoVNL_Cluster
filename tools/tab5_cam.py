@@ -406,7 +406,7 @@ def main(argv=None):
     sn.add_argument("--overlay", action="store_true", help="draw the regions in")
     pk = host(sub.add_parser("pick", help="draw the regions to watch"))
     pk.add_argument("--add", action="store_true", help="keep the regions already on the Tab5")
-    pk.add_argument("--scale", type=float, default=2.0, help="zoom for drawing (the picture is 640x360)")
+    pk.add_argument("--scale", type=float, default=1.5, help="zoom for drawing (the picture is 800x600)")
     pk.add_argument("--save", default="tab5_rois.json")
     ex = host(sub.add_parser("exposure", help="set exposure and gain once, then hold them"))
     ex.add_argument("--target", type=int, help="mean gray level in the regions (default 90)")

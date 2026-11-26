@@ -27,8 +27,8 @@ static const char *TAG = "ui";
 
 #define SCR_W 1280
 #define SCR_H 720
-#define PV_W 960   /* preview: 1.5x the 640x360 detector frame */
-#define PV_H 540
+#define PV_MAX_W 960   /* preview area, left; the frame is fitted into it */
+#define PV_MAX_H 720
 #define SCREEN_OFF_MS (2 * 60 * 1000)
 #define MAX_APS 24
 
@@ -45,7 +45,8 @@ static uint16_t *s_pv;     /* preview canvas */
 static uint8_t *s_gray;
 static int s_gw, s_gh;
 static uint16_t s_lut[256];
-static uint16_t s_xmap[PV_W];
+static int s_pw_w, s_pw_h;   /* preview size */
+static uint16_t s_xmap[PV_MAX_W];
 static det_view_t s_view;
 
 static bool s_screen_on = true;
@@ -161,12 +162,12 @@ static void touch_cb(lv_indev_t *in, lv_indev_data_t *data)
 static void rect(int x, int y, int w, int h, uint16_t c)
 {
     const int t = 3;
-    int x0 = x * PV_W / s_gw, y0 = y * PV_H / s_gh;
-    int x1 = (x + w) * PV_W / s_gw - 1, y1 = (y + h) * PV_H / s_gh - 1;
-    if (x1 >= PV_W) x1 = PV_W - 1;
-    if (y1 >= PV_H) y1 = PV_H - 1;
+    int x0 = x * s_pw_w / s_gw, y0 = y * s_pw_h / s_gh;
+    int x1 = (x + w) * s_pw_w / s_gw - 1, y1 = (y + h) * s_pw_h / s_gh - 1;
+    if (x1 >= s_pw_w) x1 = s_pw_w - 1;
+    if (y1 >= s_pw_h) y1 = s_pw_h - 1;
     for (int yy = y0; yy <= y1; yy++) {
-        uint16_t *row = s_pv + yy * PV_W;
+        uint16_t *row = s_pv + yy * s_pw_w;
         if (yy < y0 + t || yy > y1 - t) {
             for (int xx = x0; xx <= x1; xx++) row[xx] = c;
         } else {
@@ -179,10 +180,10 @@ static void preview_tick(lv_timer_t *tm)
 {
     if (!s_gray || !s_screen_on || lv_screen_active() != s_main) return;
     if (det_view(s_gray, &s_view) != ESP_OK) return;
-    for (int y = 0; y < PV_H; y++) {
-        const uint8_t *src = s_gray + (y * s_gh / PV_H) * s_gw;
-        uint16_t *dst = s_pv + y * PV_W;
-        for (int x = 0; x < PV_W; x++) dst[x] = s_lut[src[s_xmap[x]]];
+    for (int y = 0; y < s_pw_h; y++) {
+        const uint8_t *src = s_gray + (y * s_gh / s_pw_h) * s_gw;
+        uint16_t *dst = s_pv + y * s_pw_w;
+        for (int x = 0; x < s_pw_w; x++) dst[x] = s_lut[src[s_xmap[x]]];
     }
     for (int i = 0; i < s_view.n; i++) {
         const det_roi_view_t *r = &s_view.roi[i];
@@ -337,10 +338,10 @@ static void status_tick(lv_timer_t *tm)
     cam_range_t ex = {0}, ga = {0};
     cam_get_exposure(&ex);
     cam_get_gain(&ga);
-    snprintf(t, sizeof(t), "%.0f fps   exposure %d   gain %d   %d regions   %d events%s%s%s",
-                          (double)cam_fps(), (int)ex.cur, (int)ga.cur, s_view.n, s_view.events,
-             s_view.learning ? "   LEARNING" : "", s_view.autoexposure ? "   AUTO EXPOSURE" : "",
-                          s_view.glare ? "   GLARE" : "");
+    snprintf(t, sizeof(t), "%.0f fps  exp %d  gain %d\n%d regions  %d events%s%s%s",
+             (double)cam_fps(), (int)ex.cur, (int)ga.cur, s_view.n, s_view.events,
+             s_view.learning ? "\nLEARNING" : "", s_view.autoexposure ? "\nAUTO EXPOSURE" : "",
+             s_view.glare ? "\nGLARE" : "");
     lv_label_set_text(s_status, t);
 }
 
@@ -348,32 +349,32 @@ static void status_tick(lv_timer_t *tm)
 
 static void build(void)
 {
-    /* main: preview left, network and buttons right, status below */
+    /* main: preview left (fitted to 960x720), right column: network, buttons, status, legend */
     s_main = screen();
     s_canvas = lv_canvas_create(s_main);
-    lv_canvas_set_buffer(s_canvas, s_pv, PV_W, PV_H, LV_COLOR_FORMAT_RGB565);
-    lv_obj_set_pos(s_canvas, 0, 0);
+    lv_canvas_set_buffer(s_canvas, s_pv, s_pw_w, s_pw_h, LV_COLOR_FORMAT_RGB565);
+    lv_obj_set_pos(s_canvas, 0, (SCR_H - s_pw_h) / 2);
+    const int bx = PV_MAX_W + 12, bw = SCR_W - PV_MAX_W - 20, bh = 76;
+    s_net = lv_label_create(s_main);
+    lv_obj_set_pos(s_net, bx, 8);
+    lv_obj_set_width(s_net, bw);
+    lv_label_set_long_mode(s_net, LV_LABEL_LONG_WRAP);
+    button(s_main, LV_SYMBOL_WIFI "  Wi-Fi", 0, bx, 112, bw, bh);
+    button(s_main, "New baseline", 1, bx, 196, bw, bh);
+    button(s_main, "Auto exposure", 2, bx, 280, bw, bh);
+    button(s_main, "Screen off", 3, bx, 364, bw, bh);
     s_status = lv_label_create(s_main);
-    lv_obj_set_pos(s_status, 12, PV_H + 16);
-    lv_obj_set_width(s_status, PV_W - 24);
+    lv_obj_set_pos(s_status, bx, 452);
+    lv_obj_set_width(s_status, bw);
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_WRAP);
     static const struct { const char *t; uint32_t c; } legend[] = {
         {"needle", 0x00ff00}, {"lamp", 0x00ffff}, {"ref", 0x4060ff}, {"changed", 0xff0000}, {"glare", 0xffff00}};
     for (int i = 0; i < 5; i++) {
         lv_obj_t *l = lv_label_create(s_main);
-        lv_obj_set_pos(l, 12 + i * 170, PV_H + 120);
+        lv_obj_set_pos(l, bx + (i % 3) * 102, 640 + (i / 3) * 34);
         lv_obj_set_style_text_color(l, lv_color_hex(legend[i].c), 0);
         lv_label_set_text(l, legend[i].t);
     }
-    s_net = lv_label_create(s_main);
-    lv_obj_set_pos(s_net, PV_W + 16, 12);
-    lv_obj_set_width(s_net, SCR_W - PV_W - 24);
-    lv_label_set_long_mode(s_net, LV_LABEL_LONG_WRAP);
-    const int bx = PV_W + 16, bw = SCR_W - PV_W - 32, bh = 90;
-    button(s_main, LV_SYMBOL_WIFI "  Wi-Fi", 0, bx, 180, bw, bh);
-    button(s_main, "New baseline", 1, bx, 290, bw, bh);
-    button(s_main, "Auto exposure", 2, bx, 400, bw, bh);
-    button(s_main, "Screen off", 3, bx, 510, bw, bh);
 
     /* network list */
     s_wifi = screen();
@@ -438,14 +439,21 @@ esp_err_t ui_start(int gray_w, int gray_h)
 
     s_draw_size = (size_t)SCR_W * SCR_H * 2;
     s_draw = heap_caps_aligned_calloc(128, 1, s_draw_size, MALLOC_CAP_SPIRAM);
-    s_pv = heap_caps_aligned_calloc(128, 1, (size_t)PV_W * PV_H * 2, MALLOC_CAP_SPIRAM);
+    /* fit the detector frame into the preview area, keeping its shape */
+    s_pw_w = PV_MAX_W;
+    s_pw_h = gray_w > 0 ? PV_MAX_W * gray_h / gray_w : PV_MAX_H;
+    if (s_pw_h > PV_MAX_H) {
+        s_pw_h = PV_MAX_H;
+        s_pw_w = PV_MAX_H * gray_w / gray_h;
+    }
+    s_pv = heap_caps_aligned_calloc(128, 1, (size_t)s_pw_w * s_pw_h * 2, MALLOC_CAP_SPIRAM);
     ESP_RETURN_ON_FALSE(s_draw && s_pv, ESP_ERR_NO_MEM, TAG, "screen buffers");
     if (gray_w > 0 && gray_h > 0) {
         s_gw = gray_w;
         s_gh = gray_h;
         s_gray = heap_caps_malloc((size_t)s_gw * s_gh, MALLOC_CAP_SPIRAM);
         ESP_RETURN_ON_FALSE(s_gray, ESP_ERR_NO_MEM, TAG, "preview buffer");
-        for (int x = 0; x < PV_W; x++) s_xmap[x] = (uint16_t)(x * s_gw / PV_W);
+        for (int x = 0; x < s_pw_w; x++) s_xmap[x] = (uint16_t)(x * s_gw / s_pw_w);
     }
     for (int g = 0; g < 256; g++) s_lut[g] = (uint16_t)(((g >> 3) << 11) | ((g >> 2) << 5) | (g >> 3));
 

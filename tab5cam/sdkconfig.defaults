@@ -19,11 +19,14 @@ CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 # Console on the USB-C port (USB Serial/JTAG); the setup command comes in this way
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
-# Camera: SC202CS (the Tab5's SC2356) on MIPI-CSI. No ISP pipeline controller, so nothing
+# Camera: SC202CS (the Tab5's SC2356) on MIPI-CSI, 1600x1200. No ISP pipeline controller, so nothing
 # adjusts exposure, gain or white balance on its own: the firmware sets them once and holds them.
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
 CONFIG_CAMERA_SC202CS=y
 CONFIG_CAMERA_SC202CS_MIPI_RAW8_1280X720_30FPS=y
+# Full sensor (1280x720 is a centre crop of it): the widest view the fixed lens gives
+CONFIG_CAMERA_SC202CS_MIPI_RAW8_1600X1200_30FPS=y
+CONFIG_CAMERA_SC202CS_MIPI_DEFAULT_FMT_RAW8_1600X1200_30FPS=y
 CONFIG_CAM_CTRL_SPI_ENABLE=n
 CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=n
 

@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-#define JPEG_MAX_PIXELS (1280 * 360)
+#define JPEG_MAX_PIXELS (1600 * 600)   /* hit picture: baseline | frame, 2 x 800x600 */
 
 esp_err_t jpeg_init(void);
 /* Encode a gray image with the P4's JPEG engine. *out is heap memory (free() it). Thread-safe. */

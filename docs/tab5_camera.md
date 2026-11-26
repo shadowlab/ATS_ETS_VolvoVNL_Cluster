@@ -79,7 +79,8 @@ A change can show just after a window ends; `--margin` (0.5 s) still credits tha
 ## Firmware
 
 `tab5cam/`, ESP-IDF 5.5.2. Screen and touch: `tab5cam/components/tab5_board` (from RetroESP's Tab5
-port, detects the panel revision), LVGL 9.2. SC202CS (SC2356) on MIPI-CSI at 1280x720, processed as 640x360 gray.
+port, detects the panel revision), LVGL 9.2. SC202CS (SC2356) on MIPI-CSI at its full 1600x1200 (the widest view the fixed lens gives), processed as
+800x600 gray.
 HTTP API is listed at the top of `tab5cam/main/web.c`. CI: `.github/workflows/tab5cam.yml`; merges publish
 `cam-build-<n>` releases with `vnl-tab5cam.bin` (write at 0x0). They are not marked latest, so the bridge's
 `releases/latest` link is unchanged.

@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-/* Gray frames at half the sensor size (640x360 from 1280x720), one callback per frame from the camera task. */
+/* Gray frames at half the sensor size (800x600 from 1600x1200), one callback per frame from the camera task. */
 typedef void (*cam_frame_cb_t)(const uint8_t *gray, int w, int h, int64_t t_ms);
 
 typedef struct {
