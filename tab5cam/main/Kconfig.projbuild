@@ -2,11 +2,11 @@
 # defines them on this setup, which stops the build ("Missing required kconfig option after retry").
 # Wi-Fi here goes over SDIO, so they are off.
 config ESP_HOSTED_HOST_USB_CDC_ACM_MANIFEST
-    bool
+    bool "Not used (Wi-Fi goes over SDIO)"
     default n
 config ESP_HOSTED_HOST_USB_CHERRYUSB_MANIFEST
-    bool
+    bool "Not used (Wi-Fi goes over SDIO)"
     default n
 config ESP_HOSTED_HOST_USB_RNDIS_MANIFEST
-    bool
+    bool "Not used (Wi-Fi goes over SDIO)"
     default n
