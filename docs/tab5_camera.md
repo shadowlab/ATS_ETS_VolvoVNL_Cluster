@@ -74,8 +74,13 @@ runs `sweep_watch.py sweep --camera none` for the range, matches the changes to 
 `sweeps/auto1/review.html`: per stage, candidates that changed something (regions, picture) and bus hits.
 Same command resumes; `--only` picks stages; `plan --save plan.json` + `--plan plan.json` to edit ranges.
 Built-in plan: J1587 MIDs 80,90 and 82,88 PIDs 00-FD; CAN FF00-FFFF (SA 03,0B,11,21,27; SA 00 without
-FF01/FF02, which reboot the cluster), FE00-FEFF (00,03,0B,11), F000-FDFF (00,11). Lamps latch until power
-cycle, so a lamp lit early in a run can't show again later in it.
+FF01/FF02, which reboot the cluster), FE00-FEFF (00,03,0B,11), F000-FDFF (00,11).
+
+Lamps latch until power cycle. `--relay COMx`: LCUS-1 USB relay (CH340, 9600 baud), NC contact in the PSU
++12 V line ahead of the A:1 and A:3 fuses (relay idle = cluster on). The runner power cycles the cluster at
+each stage start and when a region stays changed: sweep stopped, 3 s off (`--relay-off`), 20 s boot
+(`--relay-boot`), new baseline, sweep resumed. Camera changes during a cycle are left out of the review.
+Without the relay, a lamp lit early in a run can't show again later in it.
 
 ## Settings
 

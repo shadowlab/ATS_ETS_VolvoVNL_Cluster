@@ -315,9 +315,9 @@ def cmd_watch(args):
     watch(args.host, args.sweep, out, args.margin, args.delay)
 
 
-def watch(host, sweep, out, margin=0.5, delay=5, stop=None, log=print):
+def watch(host, sweep, out, margin=0.5, delay=5, stop=None, log=print, on_event=None):
     """Log the Tab5's events into out/ and match them to sweep/windows.csv. Runs until Ctrl+C, or until
-    the threading.Event `stop` is set (auto_sweep.py)."""
+    the threading.Event `stop` is set (auto_sweep.py). on_event(ev, t) sees each event."""
     os.makedirs(os.path.join(out, "cam"), exist_ok=True)
     events_path = os.path.join(out, "cam_events.csv")
     sync = ClockSync()
@@ -348,6 +348,8 @@ def watch(host, sweep, out, margin=0.5, delay=5, stop=None, log=print):
                     "score": e.get("score", ""), "peak": e.get("peak", ""), "dur": e.get("dur", ""),
                     "detail": json.dumps(detail) if detail else ""})
                 stamp = time.strftime("%H:%M:%S", time.localtime(t))
+                if on_event:
+                    on_event(e, t)
                 if ev == "start":
                     try:
                         with open(os.path.join(out, "cam", f"hit_{e['id']:04d}.jpg"), "wb") as f:

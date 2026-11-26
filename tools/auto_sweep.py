@@ -13,8 +13,10 @@ Run the same command with the same --out to resume: finished stages are skipped,
 resumes a stage where it stopped. --only picks stages by name. --plan plan.json replaces the built-in plan
 (write it with `plan --save plan.json` and edit; each stage is a name plus sweep_watch.py sweep arguments).
 
-Lamps on this cluster latch until it is power cycled, so a lamp that latched early can't show again later
-in the same run; the camera takes a new baseline for it, so the other regions keep working.
+Lamps on this cluster latch until it is power cycled. With --relay COMx (an LCUS-1 USB relay, NC contact in
+the cluster's +12 V feed) the runner power cycles the cluster at the start of each stage and whenever a
+region stays changed (the sweep stops, the cluster restarts, a new baseline is taken, the sweep resumes).
+Without it, a lamp that latched early can't show again later in the run.
 """
 
 import argparse
@@ -144,37 +146,106 @@ def bus_args(args, transport):
     return out
 
 
-def run_stage(args, st, log):
+class Relay:
+    """LCUS-1 USB relay (CH340, 9600 baud) wired with its NC contact in the cluster's +12 V feed (ahead of
+    the A:1 and A:3 fuses): energized = cluster off."""
+    ON, OFF = bytes.fromhex("A00101A2"), bytes.fromhex("A00100A1")
+
+    def __init__(self, port):
+        import serial
+        self.s = serial.Serial(port, 9600, timeout=1)
+        self.s.write(self.OFF)        # cluster powered
+
+    def cycle(self, off_s):
+        self.s.write(self.ON)
+        time.sleep(off_s)
+        self.s.write(self.OFF)
+
+
+def baseline(host, log):
+    try:
+        tab5_cam.post(host, "/baseline")
+    except (OSError, SystemExit) as e:
+        log(f"Baseline request failed ({e})")
+
+
+def power_cycle(args, relay, d, log, why):
+    t0 = time.time()
+    log(f"Power cycling the cluster ({why}), {args.relay_off:.0f} s off, {args.relay_boot:.0f} s to boot")
+    relay.cycle(args.relay_off)
+    time.sleep(args.relay_boot)
+    if not args.no_camera:
+        baseline(args.host, log)
+        time.sleep(3)
+    tab5_cam.append(os.path.join(d, "cycles.csv"), ["start", "end", "why"],
+                    {"start": f"{t0:.3f}", "end": f"{time.time():.3f}", "why": why})
+
+
+def run_sweep(cmd, f):
+    """Start sweep_watch.py; its output goes to the console and sweep.log from a reader thread."""
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=HERE)
+
+    def pump():
+        for line in p.stdout:
+            f.write(line)
+            print("   " + line.rstrip(), flush=True)
+    t = threading.Thread(target=pump, daemon=True)
+    t.start()
+    return p, t
+
+
+def run_stage(args, st, log, relay=None):
     d = os.path.join(args.out, st["name"])
     os.makedirs(d, exist_ok=True)
     transport = arg(st["args"], "--transport", "can")
     log(f"=== {st['name']}: {count_candidates(st['args'])} candidates, ~{hours(stage_seconds(st['args']))}")
+    if relay:
+        power_cycle(args, relay, d, log, "start of stage: clear latched lamps")
 
     stop = threading.Event()
+    latched = threading.Event()
+    quiet_until = [0.0]   # ignore what the power cycle itself does to the picture
+
+    def on_event(e, t):
+        if e.get("ev") == "latched" and time.time() > quiet_until[0]:
+            latched.set()
+
     watcher = None
     if not args.no_camera:
         if camera_ok(args.host, log, args.camera_wait) is None:
             log("Going on without the camera for this stage (bus hits are still logged)")
         else:
-            try:
-                tab5_cam.post(args.host, "/baseline")
-            except (OSError, SystemExit) as e:
-                log(f"Baseline request failed ({e})")
-            time.sleep(3)
+            if not relay:
+                baseline(args.host, log)
+                time.sleep(3)
             watcher = threading.Thread(target=tab5_cam.watch, daemon=True,
-                                       args=(args.host, d, d, args.margin, args.delay, stop, log))
+                                       args=(args.host, d, d, args.margin, args.delay, stop, log, on_event))
             watcher.start()
 
     cmd = [sys.executable, os.path.join(HERE, "sweep_watch.py"), "sweep", "--camera", "none", "--out", d] \
         + bus_args(args, transport) + st["args"]
     log("> " + " ".join(cmd[1:]))
+    rc = None
     with open(os.path.join(d, "sweep.log"), "a", buffering=1) as f:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=HERE)
         try:
-            for line in p.stdout:
-                f.write(line)
-                print("   " + line.rstrip(), flush=True)
-            rc = p.wait()
+            p, pump = run_sweep(cmd, f)
+            while True:
+                try:
+                    rc = p.wait(timeout=0.5)
+                    pump.join(timeout=5)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                if relay and latched.is_set():
+                    # a lamp stayed on: stop the sweep (it resumes from tried.csv), power cycle, carry on
+                    p.terminate()
+                    p.wait()
+                    pump.join(timeout=5)
+                    time.sleep(args.margin + 1)
+                    quiet_until[0] = time.time() + args.relay_off + args.relay_boot + 10
+                    power_cycle(args, relay, d, log, "a region stayed changed")
+                    latched.clear()
+                    p, pump = run_sweep(cmd, f)
         except KeyboardInterrupt:
             p.terminate()
             p.wait()
@@ -199,13 +270,14 @@ def cmd_run(args):
     with open(os.path.join(args.out, "plan.json"), "w") as f:
         json.dump(plan, f, indent=1)
     log = Log(os.path.join(args.out, "auto_sweep.log"))
+    relay = Relay(args.relay) if args.relay else None
     log(f"Run {args.out}: {len(plan)} stages, ~{hours(sum(stage_seconds(s['args']) for s in plan))} of candidates")
     for st in plan:
         done = os.path.join(args.out, st["name"], "stage_done")
         if os.path.exists(done):
             log(f"=== {st['name']}: done earlier, skipped")
             continue
-        rc = run_stage(args, st, log)
+        rc = run_stage(args, st, log, relay)
         if rc is None:
             log("Stopped. Run the same command to resume.")
             break
@@ -231,8 +303,12 @@ def read_csv(path):
 
 def summarize(stage_dir):
     """Camera hits grouped by candidate, plus bus hits, for one stage folder."""
+    cycles = [(float(c["start"]), float(c["end"])) for c in read_csv(os.path.join(stage_dir, "cycles.csv"))]
     groups = {}
     for h in read_csv(os.path.join(stage_dir, "cam_hits.csv")):
+        t = float(h.get("time") or 0)
+        if any(a <= t <= b for a, b in cycles):
+            continue   # the power cycle itself
         key = (h.get("sa", ""), h.get("pgn", ""), h.get("payload", ""))
         groups.setdefault(key, []).append(h)
     bus = [h for h in read_csv(os.path.join(stage_dir, "hits.csv")) if h.get("bus")]
@@ -301,6 +377,10 @@ def main(argv=None):
     r.add_argument("--camera-wait", type=float, default=300, help="seconds to wait for the Tab5 before a stage")
     r.add_argument("--margin", type=float, default=0.5, help="seconds after a candidate a change still counts")
     r.add_argument("--delay", type=float, default=5, help="seconds to wait for windows.csv before matching")
+    r.add_argument("--relay", help="LCUS-1 USB relay port (NC contact in the cluster's +12 V): power cycle the "
+                                   "cluster at each stage start and whenever a region stays changed")
+    r.add_argument("--relay-off", type=float, default=3, help="seconds the cluster stays off (default 3)")
+    r.add_argument("--relay-boot", type=float, default=20, help="seconds to let it boot (default 20)")
     rp = sub.add_parser("report", help="rebuild review.html")
     rp.add_argument("out")
     args = ap.parse_args(argv)

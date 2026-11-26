@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -73,6 +74,42 @@ class AutoSweepTest(unittest.TestCase):
             auto_sweep.main(base)                                    # resume: a is skipped
         self.assertEqual(len((out / "a" / "args.txt").read_text().splitlines()), 1)
         self.assertTrue((out / "review.html").exists())
+
+    def test_relay_cycles_when_a_region_latches(self):
+        fake = self.tmp / "bin"
+        fake.mkdir()
+        # each run sends for 2 s; the first run gets a latched event and is stopped, the second finishes
+        (fake / "sweep_watch.py").write_text(
+            "import sys, os, time\n"
+            "out = sys.argv[sys.argv.index('--out') + 1]\n"
+            "open(os.path.join(out, 'runs.txt'), 'a').write('run\\n')\n"
+            "time.sleep(2)\n")
+        cycles = []
+
+        class FakeRelay:
+            def cycle(self, off_s):
+                cycles.append(off_s)
+
+        def fake_watch(host, sweep, out, margin, delay, stop, log, on_event):
+            time.sleep(0.5)
+            on_event({"ev": "latched", "roi": "brake"}, time.time())
+            stop.wait(10)
+
+        plan = self.tmp / "plan.json"
+        plan.write_text(json.dumps([{"name": "a", "args": ["--pgns", "FF00"]}]))
+        out = self.tmp / "run"
+        args = ["run", "--out", str(out), "--plan", str(plan), "--relay", "COM9", "--relay-off", "0",
+                "--relay-boot", "0", "--delay", "0", "--margin", "0"]
+        with mock.patch.object(auto_sweep, "HERE", str(fake)), mock.patch("builtins.print"), \
+                mock.patch.object(auto_sweep, "Relay", lambda port: FakeRelay()), \
+                mock.patch.object(auto_sweep, "camera_ok", lambda *a: {"fps": 30}), \
+                mock.patch.object(auto_sweep.tab5_cam, "post", lambda *a, **k: {}), \
+                mock.patch.object(auto_sweep.tab5_cam, "watch", fake_watch):
+            auto_sweep.main(args)
+        self.assertEqual(len(cycles), 2)                       # stage start + the latched lamp
+        self.assertEqual((out / "a" / "runs.txt").read_text().count("run"), 2)   # resumed after the cycle
+        self.assertEqual(len((out / "a" / "cycles.csv").read_text().splitlines()), 3)
+        self.assertTrue((out / "a" / "stage_done").exists())
 
 
 if __name__ == "__main__":
