@@ -18,6 +18,7 @@ docs/messages.md.
 """
 
 import argparse
+import csv
 import threading
 import time
 
@@ -40,8 +41,11 @@ def parse_vecu(text, group=16):
     """--vecu into a list of turns, each a list of source addresses sent together.
 
     "27,21,31" is three turns of one address. "01-3F" is one turn with every
-    address in that range. "sweep" is 01-FD in groups of `group`.
+    address in that range. "sweep" is 01-FD in groups of `group`. "none" is
+    one turn with no VECU frames, for a bench with a real VECU on the bus.
     """
+    if text.strip().lower() == "none":
+        return [[]]
     turns = []
     for item in text.replace(" ", "").split(","):
         if item.lower() == "sweep":
@@ -74,9 +78,18 @@ def parse_extra(text):
 
 
 def describe_turn(sas):
+    if not sas:
+        return "none (real VECU on the bus)"
     if len(sas) == 1:
         return f"SA 0x{sas[0]:02X}"
     return f"{len(sas)} SAs 0x{sas[0]:02X}-0x{sas[-1]:02X}"
+
+
+def log_row(msg):
+    """One --log CSV row: wall-clock time (to line up with j1708_listen --log), id, SA, DA, PGN, name, data."""
+    _, pgn, sa, da = j1939.parse_id(msg.arbitration_id)
+    return [f"{time.time():.4f}", f"{msg.arbitration_id:08X}", f"{sa:02X}", f"{da:02X}",
+            f"{pgn:04X}", j1939.pgn_name(pgn), msg.dlc, bytes(msg.data).hex(" ")]
 
 
 def heartbeats(vecu, rpm, kmh, volts, park=False):
@@ -231,7 +244,8 @@ def main():
     canbus.add_bus_args(ap)
     ap.add_argument("--vecu", default="27",
                     help="VECU source addresses in hex, comma separated, tried in turn (default 27). "
-                         "A range like 01-0F sends from all of them at once; 'sweep' covers 01-FD in groups")
+                         "A range like 01-0F sends from all of them at once; 'sweep' covers 01-FD in groups; "
+                         "'none' sends no VECU frames (a real VECU is on the bus)")
     ap.add_argument("--group", type=int, default=16, help="addresses per turn for --vecu sweep (default 16)")
     ap.add_argument("--dwell", type=float, default=30, help="seconds per VECU address when several are given")
     ap.add_argument("--off", type=float, default=2, help="seconds of silence before key-on")
@@ -244,6 +258,7 @@ def main():
                          "SA may be a range, e.g. FE56:00-FD:7D, to send it from every address at once")
     ap.add_argument("--extra-period", type=float, default=0.1, help="seconds between --extra frames (default 0.1)")
     ap.add_argument("--status", type=float, default=5, help="seconds between status lines (default 5)")
+    ap.add_argument("--log", help="CSV file to write every frame heard on the bus to (not our own)")
     args = ap.parse_args()
     try:
         turns = parse_vecu(args.vecu, args.group)
@@ -255,6 +270,10 @@ def main():
         print(f"{len(turns)} turns of {args.dwell:g} s, about {len(turns) * args.dwell / 60:.0f} min per pass")
 
     bus = canbus.open_bus(args)
+    log_file = open(args.log, "w", newline="") if args.log else None
+    log = csv.writer(log_file) if log_file else None
+    if log:
+        log.writerow(["time", "id", "sa", "da", "pgn", "name", "dlc", "data"])
     sent = errors = heard = 0
     last_error = ""
     try:
@@ -314,13 +333,18 @@ def main():
             for _ in range(200):
                 if msg is None:
                     break
-                if msg.is_rx and not msg.is_error_frame and msg.arbitration_id & 0xFF == CLUSTER_SA:
-                    heard += 1
+                if msg.is_rx and not msg.is_error_frame:
+                    if msg.arbitration_id & 0xFF == CLUSTER_SA:
+                        heard += 1
+                    if log:
+                        log.writerow(log_row(msg))
                 msg = bus.recv(timeout=0.001)
     except KeyboardInterrupt:
         pass
     finally:
         canbus.close_bus(bus)
+        if log_file:
+            log_file.close()
 
 
 if __name__ == "__main__":
