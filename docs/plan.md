@@ -23,9 +23,9 @@ pressures) with the decade box. Record every result in
 still unknown.
 
 Sweeps run with [`sweep_watch.py`](../tools/README.md#camera-sweep). Changes
-are caught by a camera (DroidCam, exposure and white balance locked), by the
-cluster's own bus output, or by pressing the GPIO41 button when a lamp
-changes. Bit-by-bit sweeps then pin down which byte drives what.
+are caught by the cluster's own bus output, by the Tab5 camera
+([tab5_camera.md](tab5_camera.md), `--camera none` plus `tab5_cam.py watch`),
+or by pressing the GPIO41 button when a lamp changes. Bit-by-bit sweeps then pin down which byte drives what.
 
 ## 3. ESP32-S3 firmware (stage 1 bridge only)
 

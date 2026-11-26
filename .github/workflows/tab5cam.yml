@@ -1,0 +1,66 @@
+# Tab5 camera firmware (tab5cam/, ESP-IDF 5.5.2). Every PR and push that touches it is built; each merge
+# to main publishes a release cam-build-<run> with the merged image vnl-tab5cam.bin (write at 0x0).
+# These releases are not marked "latest", so releases/latest stays the ESP32-S3 bridge;
+# tools/flash_tab5.ps1 finds the newest cam-build release itself.
+name: tab5cam
+
+on:
+  push:
+    branches: [main]
+    tags: ["cam-v*"]
+    paths: ["tab5cam/**", ".github/workflows/tab5cam.yml"]
+  pull_request:
+    paths: ["tab5cam/**", ".github/workflows/tab5cam.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: tab5cam/managed_components
+          key: idfcomp-${{ hashFiles('tab5cam/main/idf_component.yml') }}
+      - name: Build
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          . "$IDF_PATH/export.sh" > /dev/null
+          cd tab5cam
+          idf.py build > build.log 2>&1 || { grep -E -A3 'error:|FAILED:|Error at|Compilation failed' build.log | grep -v '^.*ccache ' | head -80; exit 1; }
+          tail -5 build.log
+          idf.py merge-bin -o vnl-tab5cam.bin
+          mkdir -p ../dist
+          cp build/vnl-tab5cam.bin ../dist/
+          app=$(stat -c %s build/vnl_tab5cam.bin)
+          printf 'commit %s\nrun %s\napp_bytes %s of 4194304\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$app" > ../dist/build-info.txt
+          cat ../dist/build-info.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vnl-tab5cam
+          path: dist/
+
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vnl-tab5cam
+          path: dist
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then tag=$GITHUB_REF_NAME; else tag=cam-build-$GITHUB_RUN_NUMBER; fi
+          gh release create "$tag" dist/* -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+            --title "$tag" --notes "Tab5 camera firmware from $GITHUB_SHA"

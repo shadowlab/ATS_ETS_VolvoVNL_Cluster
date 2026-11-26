@@ -1,0 +1,16 @@
+dependencies:
+  idf: ">=5.5"
+  espressif/esp_video:
+    version: "~2.6"
+  espressif/esp_io_expander_pi4ioe5v6408:
+    version: "*"
+  # The C6 runs ESP-Hosted 3.0.9 (shadowlab/tab5-p4-c6-sdio-ota); the host must match.
+  espressif/esp_hosted:
+    version: "3.0.9"
+  espressif/esp_wifi_remote:
+    version: "1.6.5"
+  espressif/mdns:
+    version: "^1.8"
+  # Screen UI (preview, Wi-Fi picker). Screen and touch drivers come from components/tab5_board.
+  lvgl/lvgl:
+    version: "9.2.2"

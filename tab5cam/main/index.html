@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VNL cluster camera</title>
+<style>
+:root{--bg:#fff;--fg:#222;--mute:#777;--line:#ddd;--hit:#c62828;--glare:#b26a00}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#e6e6e6;--mute:#999;--line:#333;--hit:#ef5350;--glare:#ffb74d}}
+body{font-family:system-ui,sans-serif;margin:16px;background:var(--bg);color:var(--fg)}
+img{max-width:100%;display:block;border:1px solid var(--line)}
+.row{display:flex;gap:16px;flex-wrap:wrap}.col{flex:1 1 320px;min-width:0}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;font-size:14px}
+.on{color:var(--hit);font-weight:600}.glare{color:var(--glare)}small{color:var(--mute)}
+button{font:inherit;padding:6px 12px;margin-right:8px}
+#log{font-family:ui-monospace,monospace;font-size:13px;max-height:320px;overflow:auto;white-space:pre-wrap}
+</style></head><body>
+<h1>VNL cluster camera</h1>
+<p><button onclick="post('/baseline')">New baseline</button><button onclick="post('/autoexp')">Auto exposure</button>
+<small id="st"></small></p>
+<div class="row">
+<div class="col"><img src="/stream" alt="live picture"><small>Regions are boxed; white = changed now, black = reference.</small></div>
+<div class="col"><table id="scores"><tr><th>Region</th><th>Score</th><th>Threshold</th></tr></table>
+<h3>Events</h3><div id="log"></div></div>
+</div>
+<script>
+let thr = {};
+function post(u){ fetch(u,{method:'POST'}); }
+fetch('/config').then(r=>r.json()).then(c=>{ c.rois.forEach(r=>thr[r.name]=r); });
+function status(){ fetch('/status').then(r=>r.json()).then(s=>{
+  const c=s.camera; document.getElementById('st').textContent =
+   `${c.fps.toFixed(1)} fps, exposure ${c.exposure}, gain ${c.gain}, Wi-Fi ${s.rssi} dBm` + (c.autoexposure?', setting exposure…':'') + (c.learning?', taking baseline…':'');
+}).catch(()=>{}); }
+status(); setInterval(status, 5000);
+const log = document.getElementById('log');
+function add(t, cls){ const d=document.createElement('div'); d.textContent=t; if(cls) d.className=cls; log.prepend(d); }
+const es = new EventSource('/events');
+es.onmessage = m => {
+  const e = JSON.parse(m.data);
+  if (e.ev === 'tick') {
+    const tb = document.getElementById('scores');
+    tb.querySelectorAll('tr.r').forEach(x=>x.remove());
+    for (const [k,v] of Object.entries(e.scores)) {
+      const r = thr[k] || {}; const tr = document.createElement('tr'); tr.className='r';
+      if (r.thr && v >= r.thr) tr.classList.add('on');
+      tr.innerHTML = `<td></td><td>${v.toFixed(3)}</td><td>${r.thr ?? ''} ${r.kind ?? ''}</td>`;
+      tr.firstChild.textContent = k; tb.appendChild(tr);
+    }
+    return;
+  }
+  const time = new Date().toLocaleTimeString();
+  if (e.ev === 'start') {
+    add(`${time}  #${e.id} ${e.roi} changed (${(e.score*100).toFixed(1)}%)`, 'on');
+    const a = document.createElement('a'); a.href = `/hit?id=${e.id}`; a.textContent = '  picture'; a.target = '_blank';
+    log.firstChild.appendChild(a);
+  } else if (e.ev === 'glare') add(`${time}  glare (${e.rois.join(', ')}), ignored`, 'glare');
+  else if (e.ev !== 'hello') add(`${time}  ${m.data}`);
+};
+</script></body></html>

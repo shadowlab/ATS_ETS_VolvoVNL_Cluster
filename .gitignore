@@ -3,3 +3,9 @@ __pycache__/
 *.csv
 sweeps/
 .pio/
+tab5cam/build/
+tab5cam/managed_components/
+tab5cam/sdkconfig
+tab5cam/sdkconfig.old
+tab5cam/dependencies.lock
+!tab5cam/partitions.csv
