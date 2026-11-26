@@ -30,6 +30,7 @@ against the paid SAE documents.
 | 2026-11-03 | CAN | `can_wake.py` heartbeat: EEC1 (0xF004, SA 0x00, prio 3, 20 ms), ET1, EFL/P1, DM1 (lamps off) from SA 0x00, VEP1 + CCVS1 from SA 0x27 | Tach, oil pressure and coolant gauges move, check engine lamp goes out. Tach follows EEC1 at 500, 1000, 1500, 2000, 3000 rpm. Speedo stays at 0 |
 | 2026-11-03 | J1708 | `90 46 FF` (MID 144, PID 70, data FF) | Parking brake lamp on |
 | 2026-11-03 | J1708 | `90 47 FF` (MID 144, PID 71, data FF) | White "i" lamp on |
+| 2026-11-25 | J1708 | `90 2C C0` (MID 144, PID 44 warning lamps off) every 0.5 s, running before an A:3 cycle | SID 201 (VECU lost) goes inactive, then leaves the fault report. MID 140 DTC guide: SID 201 = "PID 44 missing >30 s" |
 
 Lamps stay on after the send stops. Send with the heartbeat running, every
 0.1 s. Bit mapping for PIDs 70, 71 and 72 is still open: the single-bit sweep
@@ -46,12 +47,22 @@ lamp each: untested).
 - J1708 sweep, MID 144, PIDs 00-7F, single-bit data 01-80: only PIDs 70-72 changed a lamp.
 - Bus-watch hits on PIDs 0x2C, 0x2F, 0x36 and 0xC3 were the cluster's own fault counts and diagnostic replies.
 
+- With the VECU present (`90 2C C0`), rpm 0 and 800, `--kmh 50`: CCVS1 from SA 27, SA 00 and `--vecu sweep` (01-FD); J1708 `90 54 3E`, `80 54 3E` + `80 2C C0`. Speedo stays at 0.
+- VECU at SA 0x11 (Volvo body builder manual): CCVS1 alone and with switch bytes 00; FF00-FFFF fill 40 from SA 11, 27, 00. Speedo 0.
+- All at once, 50 km/h: CCVS1 SA 11 + 00, EBC2 SA 0B, ETC1 SA 03, TCO1 SA EE, J1587 PID 44 + 84 from MIDs 144, 128, 136. Speedo 0.
+- J1708 sweep MIDs 144 and 128, PIDs 00-FD, fill 40, VECU present: speedo 0.
+- Proprietary A EF17 and EFFF from SA 11, first byte 00-FF, rest 40: speedo 0.
+- ETC2 (F005, SA 03, gear 8, range "D") + ETC1 + J1587 MID 130 PIDs 44/162/163: RNDM gear box stays blank, speedo 0.
+- FF01/FF02 from SA 00, single-bit payloads: speedo 0. Fill 40 on FF01/FF02 from SA 00 reboots the cluster.
+- The cluster's PID 194 list (incl. PID 84 FMI 9, road speed missing >8 s) never changes: not usable as feedback.
+- The DID Non-Driving menu locks only on engine rpm > 0, not on speed or the parking brake: not a speed detector.
+
 ## To try
 
 - J1708 MID 144, PIDs 80-BF (two-byte data) and C0-FD, single-bit fills.
 - Map which lamp each of `46 80`, `47 01/02/04/08` and `48 40/80` lights, and what clears a latched lamp (`00`?).
 - Other MIDs, sent like MID 144: 0x82 transmission, 0x88 brakes, 0x8E, 0xD8 lighting, 0xE8 airbag.
-- CAN proprietary sweep for the speedo, with the heartbeat running: `sweep_watch.py sweep --pgns FF00-FFFF --sources 27,00 --payloads 40` (~13 min).
+- Speedo and gear box: log a real 2010-2013 VNL VECU on the bench (VSS input fed a square wave) and replay its frames. Still untested by sweep: PDU2 FExx/FDxx/F0xx from SA 11, J1587 page-2 PIDs.
 - DM1 lamp bits from SA 0x00: byte 1 bits 8-7 MIL, 6-5 red stop, 4-3 amber, 2-1 protect (00 off, 01 on).
 - Airbag lamp: MID 232 messages, if the lamp needs the SRS module.
 - Ask the cluster for Component ID (PGN 0xFEEB) and Software ID (0xFEDA): `can_send.py --pgn EA00 --sa F9 --da 17 --data "EB FE 00" --period 0`.

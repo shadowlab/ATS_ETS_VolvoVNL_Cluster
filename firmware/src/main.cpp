@@ -9,6 +9,10 @@
 // A button between GPIO41 and GND (internal pull-up) reports to the PC only,
 // never on the bus: each press sends the frame FE 7F <press number> <checksum>
 // to USB, so j1708_listen.py and sweep_watch.py can log when you saw a change.
+//
+// A PC frame FE 7E <Hz low> <Hz high> <checksum> (MID 254, PID 126) is a local
+// command, never put on the bus: it sets a 50% square wave on GPIO7 to drive a
+// VECU's speed-sensor input (docs/vecu_bench.md). 0 Hz turns it off.
 
 #include <Arduino.h>
 
@@ -17,6 +21,9 @@ constexpr int kJ1708Rx = 18;     // UART1 RX <- XY-485 RXD
 constexpr int kMarker = 6;       // logic analyzer CH4
 constexpr int kTwaiTx = 4;       // SN65HVD230 CTX, unused until stage 2
 constexpr int kButton = 41;      // press = GPIO41 to GND; the logic analyzer can clip here too
+constexpr int kVss = 7;          // speed-sensor square wave out (VECU bench)
+constexpr int kVssChannel = 0;   // LEDC channel for kVss
+constexpr uint8_t kVssPid = 126; // PC -> bridge: FE 7E <Hz low> <Hz high> <checksum>
 
 constexpr uint8_t kButtonMid = 254;  // bench button frame: MID 254, PID 127, press number
 constexpr uint8_t kButtonPid = 127;
@@ -99,6 +106,30 @@ static bool busIdle() {
   return busLen == 0 && !Serial1.available() && micros() - lastBusByteUs >= kBusAccessUs;
 }
 
+static void setVss(uint32_t hz) {
+  if (hz == 0) {
+    ledcWrite(kVssChannel, 0);
+  } else {
+    ledcWriteTone(kVssChannel, hz);  // 50% duty
+  }
+}
+
+// A whole, checksum-good FE 7E frame from the PC is the VSS command.
+static bool handleLocalFrame() {
+  if (pcLen != 5 || pcFrame[0] != kButtonMid || pcFrame[1] != kVssPid) {
+    return false;
+  }
+  uint8_t sum = 0;
+  for (size_t i = 0; i < pcLen; i++) {
+    sum += pcFrame[i];
+  }
+  if (sum == 0) {
+    setVss(pcFrame[2] | (pcFrame[3] << 8));
+  }
+  pcLen = 0;
+  return true;
+}
+
 static void sendPcFrame() {
   digitalWrite(kMarker, HIGH);
   Serial1.write(pcFrame, pcLen);
@@ -115,6 +146,9 @@ void setup() {
   pinMode(kButton, INPUT_PULLUP);
   pinMode(kMarker, OUTPUT);
   digitalWrite(kMarker, LOW);
+  ledcSetup(kVssChannel, 1000, 10);
+  ledcAttachPin(kVss, kVssChannel);
+  ledcWrite(kVssChannel, 0);  // off until the PC asks
 
   Serial.setTxTimeoutMs(0);  // don't stall when no PC is listening
   Serial.begin(115200);      // USB ignores the baud rate
@@ -128,7 +162,7 @@ void loop() {
   readBus();
   readPc();
   readButton();
-  if (pcFrameReady() && busIdle()) {
+  if (pcFrameReady() && !handleLocalFrame() && busIdle()) {
     sendPcFrame();
   }
 }

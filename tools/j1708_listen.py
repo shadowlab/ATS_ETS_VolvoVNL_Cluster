@@ -11,6 +11,12 @@ listening, with the checksum added. It needs the ESP32 bridge firmware, which
 puts each write on the bus once it's idle. Repeat it for several frames. The
 example is MID 128 (engine) with PID 190 (engine speed) set to 0x1F40.
 
+--vss "0,100,200,400" steps the bridge's speed-sensor output (GPIO7, see
+docs/vecu_bench.md) through those frequencies in Hz, --vss-hold seconds each,
+and logs a VSS row in the CSV at each step. The output is left off at exit.
+
+    python j1708_listen.py --port COM11 --log vecu_j1708.csv --vss "0,50,100,200,400,600" --vss-hold 20
+
 Bytes that arrive close together are treated as one chunk and split into
 frames by checksum. Chunks that don't split cleanly are printed as BAD; a
 lot of those means wiring or bias trouble, or the wrong baud rate.
@@ -43,6 +49,29 @@ def parse_send(text):
     return frame
 
 
+VSS_MID, VSS_PID = 254, 126   # bridge-local command, never put on the bus
+
+
+def vss_frame(hz):
+    """Bridge command FE 7E <Hz low> <Hz high> <checksum>: speed-sensor square wave, 0 = off."""
+    if not 0 <= hz <= 0xFFFF:
+        raise ValueError(f"VSS frequency {hz} Hz out of range 0-65535")
+    return j1587.make_frame(VSS_MID, bytes([VSS_PID]) + int(hz).to_bytes(2, "little"))
+
+
+def parse_vss(text):
+    """--vss "0,100,200" into a list of whole Hz."""
+    try:
+        steps = [int(round(float(x))) for x in text.replace(" ", "").split(",") if x]
+        for hz in steps:
+            vss_frame(hz)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected Hz values 0-65535 separated by commas, got {text!r}")
+    if not steps:
+        raise argparse.ArgumentTypeError("--vss needs at least one frequency")
+    return steps
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", required=True, help="serial port, e.g. COM6 or /dev/ttyUSB0")
@@ -53,6 +82,10 @@ def main():
     ap.add_argument("--send-period", type=float, default=0.1, help="seconds between --send rounds (default 0.1)")
     ap.add_argument("--log", help="CSV file to write every frame to")
     ap.add_argument("--seconds", type=float, help="stop after this many seconds")
+    ap.add_argument("--vss", type=parse_vss, metavar="HZ,HZ,...",
+                    help="step the bridge's speed-sensor output through these frequencies (Hz)")
+    ap.add_argument("--vss-hold", type=float, default=20, help="seconds per --vss step (default 20)")
+    ap.add_argument("--vss-loop", action="store_true", help="repeat the --vss steps until stopped")
     args = ap.parse_args()
 
     port = serial.Serial(args.port, args.baud, timeout=args.gap)
@@ -64,6 +97,9 @@ def main():
     for frame in args.send:
         print(f"Sending every {args.send_period * 1000:g} ms: {frame.hex(' ')}  {j1587.describe(frame)}")
     next_send = time.time()
+    vss_steps = list(args.vss or [])
+    vss_index = -1
+    next_vss = time.time() if vss_steps else float("inf")
     counts = Counter()
     bad = 0
     chunk = bytearray()
@@ -75,6 +111,20 @@ def main():
                     port.write(frame)
                     time.sleep(SEND_SPACING)
                 next_send = time.time() + args.send_period
+            if time.time() >= next_vss:
+                vss_index += 1
+                if vss_index >= len(vss_steps) and not args.vss_loop:
+                    vss_index = len(vss_steps) - 1
+                    next_vss = float("inf")
+                else:
+                    hz = vss_steps[vss_index % len(vss_steps)]
+                    port.write(vss_frame(hz))
+                    time.sleep(SEND_SPACING)
+                    t = time.time()
+                    print(f"VSS {t - start:9.3f}  {hz} Hz")
+                    if writer:
+                        writer.writerow([f"{t:.4f}", "", "", f"VSS {hz} Hz"])
+                    next_vss = t + args.vss_hold
             data = port.read(256)
             if data:
                 chunk += data
@@ -99,6 +149,9 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        if vss_steps:
+            port.write(vss_frame(0))
+            port.flush()
         port.close()
         if log_file:
             log_file.close()

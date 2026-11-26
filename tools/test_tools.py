@@ -93,6 +93,8 @@ class WakeTest(unittest.TestCase):
         self.assertEqual(bytes(frames["CCVS1"].data[:3]), b"\xf3\x00\x32")
         self.assertEqual(bytes(frames["VEP1"].data[4:]), b"\x14\x01\x14\x01")
         self.assertEqual(frames["VEP1"].arbitration_id, 0x18FEF727)
+        parked = {name: msg for name, _, msg in can_wake.heartbeats(0x27, 0, 0, 13.8, park=True)}
+        self.assertEqual(parked["CCVS1"].data[0], 0xF7)
 
     def test_parse_vecu(self):
         self.assertEqual(can_wake.parse_vecu("27,21"), [[0x27], [0x21]])
@@ -148,6 +150,32 @@ class WakeTest(unittest.TestCase):
         sched.due(0.0)
         burst = [m for m in sched.due(1.0) if m.arbitration_id == 0x0CF00400]
         self.assertEqual(len(burst), 1)
+
+
+class VecuBenchTest(unittest.TestCase):
+    def test_vecu_none_sends_engine_only(self):
+        self.assertEqual(can_wake.parse_vecu("none"), [[]])
+        names = [name for name, _, _ in can_wake.heartbeats([], 0, 0, 13.8)]
+        self.assertEqual(names, ["EEC1", "ET1", "EFL/P1", "DM1"])
+        self.assertIn("none", can_wake.describe_turn([]))
+
+    def test_log_row(self):
+        import can
+        msg = can.Message(arbitration_id=0x18FEF111, data=bytes([0xF3, 0x00, 0x32]), is_extended_id=True)
+        row = can_wake.log_row(msg)
+        self.assertEqual(row[1:5], ["18FEF111", "11", "FF", "FEF1"])
+        self.assertEqual(row[-1], "f3 00 32")
+        pdu1 = can_wake.log_row(can.Message(arbitration_id=0x18EF1711, data=b"\x01", is_extended_id=True))
+        self.assertEqual(pdu1[2:5], ["11", "17", "EF00"])
+
+    def test_vss_frame(self):
+        frame = j1708_listen.vss_frame(400)
+        self.assertEqual(frame[:4], bytes([0xFE, 0x7E, 0x90, 0x01]))
+        self.assertEqual(sum(frame) & 0xFF, 0)
+        self.assertEqual(j1708_listen.parse_vss("0, 50,400.4"), [0, 50, 400])
+        for bad in ("", "abc", "70000", "-1"):
+            with self.assertRaises(argparse.ArgumentTypeError):
+                j1708_listen.parse_vss(bad)
 
 
 class SendArgTest(unittest.TestCase):
