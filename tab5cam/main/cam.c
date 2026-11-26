@@ -144,11 +144,12 @@ esp_err_t cam_start(cam_frame_cb_t cb)
 
 static esp_err_t get_ctrl(uint32_t id, cam_range_t *r)
 {
-    struct v4l2_queryctrl q = {.id = id};
-    if (ioctl(s_fd, VIDIOC_QUERYCTRL, &q) != 0) return ESP_ERR_NOT_SUPPORTED;
-    r->min = q.minimum;
-    r->max = q.maximum;
-    r->def = q.default_value;
+    /* esp_video answers VIDIOC_QUERY_EXT_CTRL, not VIDIOC_QUERYCTRL */
+    struct v4l2_query_ext_ctrl q = {.id = id};
+    if (ioctl(s_fd, VIDIOC_QUERY_EXT_CTRL, &q) != 0) return ESP_ERR_NOT_SUPPORTED;
+    r->min = (int32_t)q.minimum;
+    r->max = (int32_t)q.maximum;
+    r->def = (int32_t)q.default_value;
     struct v4l2_ext_control c = {.id = id};
     struct v4l2_ext_controls cs = {.ctrl_class = V4L2_CTRL_CLASS_USER, .count = 1, .controls = &c};
     r->cur = ioctl(s_fd, VIDIOC_G_EXT_CTRLS, &cs) == 0 ? c.value : q.default_value;
