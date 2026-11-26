@@ -1,0 +1,5 @@
+# esp_video's manifest tests this option to pick its esp_h264 version, but its published Kconfig doesn't
+# always define it, which stops the build ("Missing required kconfig option"). Define it here.
+config ESP_VIDEO_USE_CUSTOMIZED_ESP_H264_VERSION
+    bool
+    default n
