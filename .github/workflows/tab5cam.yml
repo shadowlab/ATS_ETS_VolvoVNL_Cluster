@@ -36,7 +36,7 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           . "$IDF_PATH/export.sh" > /dev/null
           cd tab5cam
-          idf.py build > build.log 2>&1 || { set +e; grep -v 'NOTICE: Using component' build.log | grep -i -B3 -A12 'error\|missing\|warning: ' | head -120; grep -rn 'CDC_ACM_MANIFEST' managed_components main | head; cat managed_components/espressif__esp_hosted/idf_component.yml; exit 1; }
+          idf.py build > build.log 2>&1 || { grep -E -A3 'error:|FAILED:|Error at|Compilation failed' build.log | grep -v '^.*ccache ' | head -80; exit 1; }
           tail -5 build.log
           idf.py merge-bin -o vnl-tab5cam.bin
           mkdir -p ../dist
