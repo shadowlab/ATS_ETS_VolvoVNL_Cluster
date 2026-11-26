@@ -62,6 +62,21 @@ seconds, the same clock as `windows.csv`: the Tab5's clock is mapped with the lo
 A change can show just after a window ends; `--margin` (0.5 s) still credits that window.
 `python tab5_cam.py match sweeps/run1 --margin 1` redoes the matching afterwards.
 
+## Unattended sweep of everything
+
+```
+python auto_sweep.py plan                    # stages, candidates, time (~9 h plus recovery)
+python auto_sweep.py run --out sweeps/auto1 --interface gs_usb --channel 0 --port COM11
+```
+
+Per stage: checks the Tab5 (waits up to 5 min, else goes on bus-only), new baseline, logs camera events,
+runs `sweep_watch.py sweep --camera none` for the range, matches the changes to candidates. Ends with
+`sweeps/auto1/review.html`: per stage, candidates that changed something (regions, picture) and bus hits.
+Same command resumes; `--only` picks stages; `plan --save plan.json` + `--plan plan.json` to edit ranges.
+Built-in plan: J1587 MIDs 80,90 and 82,88 PIDs 00-FD; CAN FF00-FFFF (SA 03,0B,11,21,27; SA 00 without
+FF01/FF02, which reboot the cluster), FE00-FEFF (00,03,0B,11), F000-FDFF (00,11). Lamps latch until power
+cycle, so a lamp lit early in a run can't show again later in it.
+
 ## Settings
 
 `python tab5_cam.py config` shows them; `--set key=value` changes one (kept on the Tab5).

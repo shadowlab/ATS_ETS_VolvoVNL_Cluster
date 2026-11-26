@@ -312,24 +312,32 @@ def cmd_watch(args):
     out = args.out or args.sweep
     if not out:
         raise SystemExit("Give --sweep (the sweep folder) or --out")
+    watch(args.host, args.sweep, out, args.margin, args.delay)
+
+
+def watch(host, sweep, out, margin=0.5, delay=5, stop=None, log=print):
+    """Log the Tab5's events into out/ and match them to sweep/windows.csv. Runs until Ctrl+C, or until
+    the threading.Event `stop` is set (auto_sweep.py)."""
     os.makedirs(os.path.join(out, "cam"), exist_ok=True)
     events_path = os.path.join(out, "cam_events.csv")
     sync = ClockSync()
     last_n = 0
     pending = []          # (time, event) waiting for their window to be written to windows.csv
-    print(f"Watching http://{args.host}/  ->  {out}   (Ctrl+C to stop)")
+    log(f"Watching http://{host}/  ->  {out}   (Ctrl+C to stop)")
     while True:
         try:
-            for n, e in sse_events(args.host, since=last_n + 1 if last_n else 0):
+            for n, e in sse_events(host, since=last_n + 1 if last_n else 0):
+                if stop is not None and stop.is_set():
+                    raise KeyboardInterrupt
                 last_n = max(last_n, n)
                 ev = e.get("ev")
                 if "t" not in e:
                     continue
                 t = sync.observe(e["t"])
                 if ev == "tick":
-                    if pending and time.time() > pending[0][0] + args.margin + args.delay:
+                    if pending and time.time() > pending[0][0] + margin + delay:
                         for pt, pe in pending:
-                            record_hit(out, args.sweep, pe, pt, args.margin)
+                            record_hit(out, sweep, pe, pt, margin, log)
                         pending.clear()
                     continue
                 if ev == "hello":
@@ -343,26 +351,30 @@ def cmd_watch(args):
                 if ev == "start":
                     try:
                         with open(os.path.join(out, "cam", f"hit_{e['id']:04d}.jpg"), "wb") as f:
-                            f.write(get(args.host, f"/hit?id={e['id']}"))
+                            f.write(get(host, f"/hit?id={e['id']}"))
                     except OSError:
                         pass
                     pending.append((t, e))
                 elif ev == "glare":
-                    print(f"{stamp}  glare ({', '.join(e.get('rois', []))}), not counted")
+                    log(f"{stamp}  glare ({', '.join(e.get('rois', []))}), not counted")
                 elif ev == "latched":
-                    print(f"{stamp}  #{e['id']} {e.get('roi')} stayed changed; new baseline for it")
+                    log(f"{stamp}  #{e['id']} {e.get('roi')} stayed changed; new baseline for it")
                 elif ev == "autoexp":
-                    print(f"{stamp}  exposure set: {e.get('exposure')} gain {e.get('gain')}")
+                    log(f"{stamp}  exposure set: {e.get('exposure')} gain {e.get('gain')}")
         except KeyboardInterrupt:
             for pt, pe in pending:
-                record_hit(out, args.sweep, pe, pt, args.margin)
-            print(f"Stopped. Events in {events_path}")
+                record_hit(out, sweep, pe, pt, margin, log)
+            log(f"Stopped. Events in {events_path}")
             return
         except (OSError, ValueError) as err:
-            print(f"Lost the Tab5 ({err}); reconnecting...")
+            log(f"Lost the Tab5 ({err}); reconnecting...")
             try:
-                time.sleep(2)
+                if stop is not None and stop.wait(2):
+                    raise KeyboardInterrupt
+                time.sleep(0 if stop is not None else 2)
             except KeyboardInterrupt:
+                for pt, pe in pending:
+                    record_hit(out, sweep, pe, pt, margin, log)
                 return
 
 
