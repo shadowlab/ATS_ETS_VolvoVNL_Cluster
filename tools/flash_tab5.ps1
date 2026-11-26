@@ -63,7 +63,13 @@ $log = Join-Path $PSScriptRoot "flash_tab5_$(Get-Date -Format yyyyMMdd_HHmmss).l
 Get-Content "$dir\build-info.txt" | Tee-Object -FilePath $log
 $esptool = Get-Esptool
 $esptoolArgs = @($esptool | Select-Object -Skip 1)
-& $esptool[0] @esptoolArgs --chip esp32p4 --port $Port --baud 460800 write_flash 0x0 "$dir\vnl-tab5cam.bin" *>> $log
+# The merged image fills 0x9000-0xFFFF (NVS + phy_init, see tab5cam/partitions.csv) with 0xFF. Write
+# around it so Wi-Fi, regions and exposure saved on the Tab5 survive a reflash.
+$img = [IO.File]::ReadAllBytes("$dir\vnl-tab5cam.bin")
+$boot = "$dir\boot_0x0.bin"; $app = "$dir\app_0x10000.bin"
+[IO.File]::WriteAllBytes($boot, $img[0..(0x9000 - 1)])
+[IO.File]::WriteAllBytes($app, $img[0x10000..($img.Length - 1)])
+& $esptool[0] @esptoolArgs --chip esp32p4 --port $Port --baud 460800 write_flash 0x0 $boot 0x10000 $app *>> $log
 $flashed = $LASTEXITCODE -eq 0
 "flash " + $(if ($flashed) { "OK" } else { "FAILED" }) | Tee-Object -FilePath $log -Append
 if (-not $flashed) {
